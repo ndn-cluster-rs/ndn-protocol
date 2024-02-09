@@ -10,6 +10,10 @@ trait FromUriPart: Sized {
     fn from_uri_part(s: &[u8]) -> Option<Self>;
 }
 
+trait ToUriPart {
+    fn to_uri_part(&self) -> String;
+}
+
 #[derive(Debug, Tlv, PartialEq, Eq)]
 #[tlv(8)]
 pub struct GenericNameComponent {
@@ -24,6 +28,17 @@ impl FromUriPart for GenericNameComponent {
             Bytes::copy_from_slice(s)
         };
         Some(Self { name })
+    }
+}
+
+impl ToUriPart for GenericNameComponent {
+    fn to_uri_part(&self) -> String {
+        let name = if self.name.iter().all(|x| *x == b'.') {
+            Bytes::from_iter(b"...".iter().chain(self.name.iter()).map(|x| *x))
+        } else {
+            self.name.clone()
+        };
+        urlencoding::encode_binary(&name).into_owned()
     }
 }
 
@@ -46,6 +61,12 @@ impl FromUriPart for ImplicitSha256DigestComponent {
     }
 }
 
+impl ToUriPart for ImplicitSha256DigestComponent {
+    fn to_uri_part(&self) -> String {
+        format!("sha256digest={}", hex::encode(&self.name))
+    }
+}
+
 #[derive(Debug, Tlv, PartialEq, Eq)]
 #[tlv(2)]
 pub struct ParametersSha256DigestComponent {
@@ -62,6 +83,12 @@ impl FromUriPart for ParametersSha256DigestComponent {
             name.clone_from_slice(&s[2..]);
         }
         Some(Self { name })
+    }
+}
+
+impl ToUriPart for ParametersSha256DigestComponent {
+    fn to_uri_part(&self) -> String {
+        format!("params-sha256={}", hex::encode(&self.name))
     }
 }
 
@@ -106,6 +133,16 @@ impl FromUriPart for NameComponent {
     }
 }
 
+impl ToUriPart for NameComponent {
+    fn to_uri_part(&self) -> String {
+        match *self {
+            Self::GenericNameComponent(ref component) => component.to_uri_part(),
+            Self::ImplicitSha256DigestComponent(ref component) => component.to_uri_part(),
+            Self::ParametersSha256DigestComponent(ref component) => component.to_uri_part(),
+        }
+    }
+}
+
 #[derive(Debug, Tlv, PartialEq, Eq)]
 #[tlv(7)]
 pub struct Name {
@@ -138,6 +175,18 @@ impl Name {
 
         Ok(Name { components })
     }
+
+    pub fn to_uri(&self) -> Url {
+        let path: String = itertools::intersperse(
+            self.components
+                .iter()
+                .map(ToUriPart::to_uri_part)
+                .map(Cow::Owned),
+            Cow::Borrowed("/"),
+        )
+        .collect();
+        Url::parse(&format!("ndn:/{}", path)).unwrap()
+    }
 }
 
 #[cfg(test)]
@@ -161,6 +210,7 @@ mod tests {
                 ]
             }
         );
+        assert_eq!(name.to_uri(), Url::parse("ndn:/hello/world").unwrap());
     }
 
     #[test]
@@ -180,6 +230,7 @@ mod tests {
                 ]
             }
         );
+        assert_eq!(name.to_uri(), Url::parse("ndn:/hello/world").unwrap());
     }
 
     #[test]
@@ -206,6 +257,7 @@ mod tests {
                 ]
             }
         );
+        assert_eq!(name.to_uri(), Url::parse(&format!("ndn:{}", uri)).unwrap());
     }
 
     #[test]
@@ -260,6 +312,7 @@ mod tests {
                 ]
             }
         );
+        assert_eq!(name.to_uri(), Url::parse(&format!("ndn:{}", uri)).unwrap());
     }
 
     #[test]
@@ -321,6 +374,7 @@ mod tests {
                 ]
             }
         );
+        assert_eq!(name.to_uri(), Url::parse(&format!("ndn:{}", uri)).unwrap());
     }
 
     #[test]
@@ -340,5 +394,6 @@ mod tests {
                 ]
             }
         );
+        assert_eq!(name.to_uri(), Url::parse(&format!("ndn:{}", uri)).unwrap());
     }
 }
