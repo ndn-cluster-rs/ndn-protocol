@@ -125,9 +125,12 @@ impl Name {
 
         let mut components = Vec::with_capacity(path.split("/").count());
 
-        for segment in path.split("/") {
+        for mut segment in path.split("/") {
             if segment == "" {
                 continue;
+            }
+            if segment.bytes().all(|x| x == b'.') {
+                segment = &segment[3..];
             }
             let decoded = urlencoding::decode_binary(segment.as_bytes());
             components.push(NameComponent::from_uri_part(&decoded).ok_or(NdnError::ParseError)?);
@@ -282,6 +285,44 @@ mod tests {
                             ]
                         }
                     )
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn dot3() {
+        let uri = "/.../world";
+        let name = Name::from_str(uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b""[..])
+                    }),
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"world"[..])
+                    })
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn dot4() {
+        let uri = "/..../world";
+        let name = Name::from_str(uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"."[..])
+                    }),
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"world"[..])
+                    })
                 ]
             }
         );
