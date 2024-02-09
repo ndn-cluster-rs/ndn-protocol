@@ -291,6 +291,20 @@ mod tests {
     }
 
     #[test]
+    fn dot2() {
+        let uri = "/hello/../world";
+        let name = Name::from_str(uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![NameComponent::GenericNameComponent(GenericNameComponent {
+                    name: Bytes::from(&b"world"[..])
+                })]
+            }
+        );
+    }
+
+    #[test]
     fn dot3() {
         let uri = "/.../world";
         let name = Name::from_str(uri).unwrap();
