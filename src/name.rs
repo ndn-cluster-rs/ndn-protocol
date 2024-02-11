@@ -146,7 +146,7 @@ impl ToUriPart for NameComponent {
 #[derive(Debug, Tlv, PartialEq, Eq)]
 #[tlv(7)]
 pub struct Name {
-    components: Vec<NameComponent>,
+    pub(crate) components: Vec<NameComponent>,
 }
 
 impl Name {
