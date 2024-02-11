@@ -2,7 +2,9 @@ pub use interest::{
     CanBePrefix, ForwardingHint, HopLimit, Interest, InterestLifetime, MustBeFresh, Nonce,
 };
 pub use name::{GenericNameComponent, ImplicitSha256DigestComponent, Name, NameComponent};
-pub use signature::{KeyDigest, KeyLocator, SignatureInfo, SignatureType, SignatureValue};
+pub use signature::{
+    DigestSha256, KeyDigest, KeyLocator, SignatureInfo, SignatureType, SignatureValue,
+};
 
 mod error;
 mod interest;

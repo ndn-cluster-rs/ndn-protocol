@@ -70,7 +70,7 @@ impl ToUriPart for ImplicitSha256DigestComponent {
 #[derive(Debug, Tlv, PartialEq, Eq)]
 #[tlv(2)]
 pub struct ParametersSha256DigestComponent {
-    name: [u8; 32],
+    pub(crate) name: [u8; 32],
 }
 
 impl FromUriPart for ParametersSha256DigestComponent {

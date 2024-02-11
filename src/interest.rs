@@ -1,9 +1,11 @@
-use bytes::{BufMut, Bytes, BytesMut};
-use ndn_tlv::{Tlv, TlvDecode, TlvEncode, VarNum};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use ndn_tlv::{find_tlv, NonNegativeInteger, Tlv, TlvDecode, TlvEncode, VarNum};
+use sha2::{Digest, Sha256};
 
 use crate::{
+    name::ParametersSha256DigestComponent,
     signature::{InterestSignatureInfo, InterestSignatureValue, SignMethod, SignatureSeqNum},
-    Name, NameComponent, SignatureInfo, SignatureType,
+    Name, NameComponent, SignatureType,
 };
 
 #[derive(Debug, Tlv, PartialEq, Eq)]
@@ -29,7 +31,7 @@ pub struct Nonce {
 #[derive(Debug, Tlv, PartialEq, Eq)]
 #[tlv(12)]
 pub struct InterestLifetime {
-    lifetime: VarNum,
+    lifetime: NonNegativeInteger,
 }
 
 #[derive(Debug, Tlv, PartialEq, Eq)]
@@ -80,7 +82,7 @@ impl TlvEncode for SignedInterest {
         let _ = VarNum::decode(&mut interest);
 
         bytes.put(VarNum::from(Self::TYP).encode());
-        bytes.put(VarNum::from(self.size()).encode());
+        bytes.put(VarNum::from(self.inner_size()).encode());
         bytes.put(interest);
         bytes.put(self.signature_value.encode());
         bytes.freeze()
@@ -152,15 +154,16 @@ impl Interest {
         self.nonce.as_ref().map(|x| &x.nonce)
     }
 
-    pub fn set_interest_lifetime(&mut self, interest_lifetime: Option<u64>) -> &mut Self {
-        self.interest_lifetime = interest_lifetime.map(|lifetime| InterestLifetime {
-            lifetime: lifetime.into(),
-        });
+    pub fn set_interest_lifetime(
+        &mut self,
+        interest_lifetime: Option<NonNegativeInteger>,
+    ) -> &mut Self {
+        self.interest_lifetime = interest_lifetime.map(|lifetime| InterestLifetime { lifetime });
         self
     }
 
-    pub fn interest_lifetime(&self) -> Option<u64> {
-        self.interest_lifetime.as_ref().map(|x| x.lifetime.into())
+    pub fn interest_lifetime(&self) -> Option<NonNegativeInteger> {
+        self.interest_lifetime.as_ref().map(|x| x.lifetime)
     }
 
     pub fn set_hop_limit(&mut self, hop_limit: Option<u8>) -> &mut Self {
@@ -193,11 +196,43 @@ impl Interest {
             }),
         });
 
-        let mut bytes = self.encode();
-        let _ = VarNum::decode(&mut bytes);
-        let _ = VarNum::decode(&mut bytes);
+        let bytes = self.encode();
+        let signature = {
+            let mut bytes = bytes.clone();
+            let _ = VarNum::decode(&mut bytes);
+            let _ = VarNum::decode(&mut bytes);
+            let _ = find_tlv::<ApplicationParameters>(&mut bytes, false);
 
-        let signature = sign_method.sign(bytes);
+            let mut signature_buffer =
+                BytesMut::with_capacity(self.name.inner_size() + bytes.remaining());
+            for component in &self.name.components {
+                signature_buffer.put(component.encode());
+            }
+            signature_buffer.put(&mut bytes);
+
+            sign_method.sign(signature_buffer.freeze())
+        };
+
+        let param_digest = {
+            let mut data = bytes.clone();
+            let _ = VarNum::decode(&mut data);
+            let _ = VarNum::decode(&mut data);
+            let _ = find_tlv::<ApplicationParameters>(&mut data, false);
+            let mut hasher = Sha256::new();
+            hasher.update(&data);
+            hasher.update(&[0x2e]);
+            hasher.update(VarNum::from(signature.len()).encode());
+            hasher.update(signature.clone());
+            hasher.finalize()
+        };
+
+        self.name
+            .components
+            .push(NameComponent::ParametersSha256DigestComponent(
+                ParametersSha256DigestComponent {
+                    name: param_digest.into(),
+                },
+            ));
 
         SignedInterest {
             interest: self,
