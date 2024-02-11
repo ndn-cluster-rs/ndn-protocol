@@ -1,51 +1,12 @@
+pub use interest::{
+    CanBePrefix, ForwardingHint, HopLimit, Interest, InterestLifetime, MustBeFresh, Nonce,
+};
 pub use name::{GenericNameComponent, ImplicitSha256DigestComponent, Name, NameComponent};
 
 mod error;
+mod interest;
 mod name;
 
-// #[derive(Debug, Tlv)]
-// #[tlv(33)]
-// struct CanBePrefix;
-//
-// #[derive(Debug, Tlv)]
-// #[tlv(18)]
-// struct MustBeFresh;
-//
-// #[derive(Debug, Tlv)]
-// #[tlv(30)]
-// struct ForwardingHint {
-//     name: Name,
-// }
-//
-// #[derive(Debug, Tlv)]
-// #[tlv(10)]
-// struct Nonce {
-//     nonce: Bytes,
-// }
-//
-// #[derive(Debug, Tlv)]
-// #[tlv(12)]
-// struct InterestLifetime {
-//     lifetime: VarNum,
-// }
-//
-// #[derive(Debug, Tlv)]
-// #[tlv(34)]
-// struct HopLimit {
-//     limit: Bytes,
-// }
-//
-// #[derive(Debug, Tlv)]
-// #[tlv(5)]
-// struct Interest {
-//     name: Name,
-//     can_be_prefix: Option<CanBePrefix>,
-//     must_be_fresh: Option<MustBeFresh>,
-//     forwarding_hint: Option<ForwardingHint>,
-//     nonce: Option<Nonce>,
-//     interest_lifetime: Option<InterestLifetime>,
-//     hop_limit: Option<HopLimit>,
-// }
 //
 // #[derive(Debug, Tlv)]
 // #[tlv(24)]
