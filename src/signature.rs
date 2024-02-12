@@ -1,4 +1,4 @@
-use bytes::{Buf, Bytes};
+use bytes::Bytes;
 use ndn_tlv::{NonNegativeInteger, Tlv, TlvEncode, VarNum};
 
 use sha2::{Digest, Sha256};

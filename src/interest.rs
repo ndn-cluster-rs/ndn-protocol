@@ -4,11 +4,12 @@ use rand::{Rng, SeedableRng};
 use sha2::{Digest, Sha256};
 
 use crate::{
+    error::VerifyError,
     name::ParametersSha256DigestComponent,
     signature::{
         InterestSignatureInfo, InterestSignatureValue, SignMethod, SignatureNonce, SignatureSeqNum,
     },
-    Name, NameComponent, SignatureType,
+    DigestSha256, Name, NameComponent, SignatureType,
 };
 
 #[derive(Debug, Tlv, PartialEq, Eq)]
@@ -61,11 +62,7 @@ pub struct Interest {
     hop_limit: Option<HopLimit>,
     application_parameters: Option<ApplicationParameters>,
     signature_info: Option<InterestSignatureInfo>,
-}
-
-pub struct SignedInterest {
-    interest: Interest,
-    signature_value: InterestSignatureValue,
+    signature_value: Option<InterestSignatureValue>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -85,35 +82,6 @@ impl Default for SignSettings {
     }
 }
 
-impl Tlv for SignedInterest {
-    const TYP: usize = 5;
-
-    fn inner_size(&self) -> usize {
-        self.interest.inner_size() + self.signature_value.size()
-    }
-}
-
-impl TlvEncode for SignedInterest {
-    fn encode(&self) -> Bytes {
-        let mut bytes = BytesMut::with_capacity(self.size());
-
-        let mut interest = self.interest.encode();
-        let _ = VarNum::decode(&mut interest);
-        let _ = VarNum::decode(&mut interest);
-
-        bytes.put(VarNum::from(Self::TYP).encode());
-        bytes.put(VarNum::from(self.inner_size()).encode());
-        bytes.put(interest);
-        bytes.put(self.signature_value.encode());
-        bytes.freeze()
-    }
-
-    fn size(&self) -> usize {
-        let inner_size = self.inner_size();
-        VarNum::from(Self::TYP).size() + VarNum::from(inner_size).size() + inner_size
-    }
-}
-
 impl Interest {
     pub fn new(name: Name) -> Self {
         Self {
@@ -126,6 +94,7 @@ impl Interest {
             hop_limit: None,
             application_parameters: None,
             signature_info: None,
+            signature_value: None,
         }
     }
 
@@ -244,11 +213,42 @@ impl Interest {
         self.application_parameters.as_ref().map(|x| &x.data)
     }
 
-    pub fn sign<T: SignMethod>(
-        mut self,
-        sign_method: &mut T,
-        settings: SignSettings,
-    ) -> SignedInterest {
+    fn compute_signature<T: SignMethod>(&self, sign_method: &T) -> Bytes {
+        let mut bytes = self.encode();
+        let _ = VarNum::decode(&mut bytes);
+        let _ = VarNum::decode(&mut bytes);
+        let _ = find_tlv::<ApplicationParameters>(&mut bytes, false);
+
+        let mut end = bytes.clone();
+        let _ = find_tlv::<InterestSignatureValue>(&mut end, false);
+        bytes.truncate(bytes.remaining() - end.remaining());
+
+        let mut signature_buffer =
+            BytesMut::with_capacity(self.name.inner_size() + bytes.remaining());
+        for component in &self.name.components {
+            if !matches!(component, NameComponent::ParametersSha256DigestComponent(_)) {
+                signature_buffer.put(component.encode());
+            }
+        }
+        signature_buffer.put(&mut bytes);
+
+        sign_method.sign(signature_buffer.freeze())
+    }
+
+    fn parameters_digest(&self) -> [u8; 32] {
+        let mut data = self.encode();
+        let _ = VarNum::decode(&mut data);
+        let _ = VarNum::decode(&mut data);
+        let _ = find_tlv::<ApplicationParameters>(&mut data, false);
+        let mut hasher = Sha256::new();
+        hasher.update(&data);
+        hasher.finalize().into()
+    }
+
+    pub fn sign<T>(&mut self, sign_method: &mut T, settings: SignSettings)
+    where
+        T: SignMethod,
+    {
         self.name
             .components
             .retain(|x| !matches!(x, NameComponent::ParametersSha256DigestComponent(_)));
@@ -282,47 +282,100 @@ impl Interest {
             }),
         });
 
-        let bytes = self.encode();
-        let signature = {
-            let mut bytes = bytes.clone();
-            let _ = VarNum::decode(&mut bytes);
-            let _ = VarNum::decode(&mut bytes);
-            let _ = find_tlv::<ApplicationParameters>(&mut bytes, false);
-
-            let mut signature_buffer =
-                BytesMut::with_capacity(self.name.inner_size() + bytes.remaining());
-            for component in &self.name.components {
-                signature_buffer.put(component.encode());
-            }
-            signature_buffer.put(&mut bytes);
-
-            sign_method.sign(signature_buffer.freeze())
-        };
-
-        let param_digest = {
-            let mut data = bytes.clone();
-            let _ = VarNum::decode(&mut data);
-            let _ = VarNum::decode(&mut data);
-            let _ = find_tlv::<ApplicationParameters>(&mut data, false);
-            let mut hasher = Sha256::new();
-            hasher.update(&data);
-            hasher.update(&[0x2e]);
-            hasher.update(VarNum::from(signature.len()).encode());
-            hasher.update(signature.clone());
-            hasher.finalize()
-        };
+        self.signature_value = Some(InterestSignatureValue {
+            data: self.compute_signature(sign_method),
+        });
 
         self.name
             .components
             .push(NameComponent::ParametersSha256DigestComponent(
                 ParametersSha256DigestComponent {
-                    name: param_digest.into(),
+                    name: self.parameters_digest(),
                 },
             ));
+    }
 
-        SignedInterest {
-            interest: self,
-            signature_value: InterestSignatureValue { data: signature },
+    pub fn is_signed(&self) -> bool {
+        self.signature_info.is_some()
+    }
+
+    fn verify_param_digest(&self) -> Result<(), VerifyError> {
+        if self.is_signed() {
+            if self.application_parameters.is_none() {
+                return Err(VerifyError::MissingApplicationParameters);
+            }
+
+            let Some(NameComponent::ParametersSha256DigestComponent(param_digest)) =
+                self.name.components.last()
+            else {
+                return Err(VerifyError::InvalidParameterDigest);
+            };
+
+            if param_digest.name != self.parameters_digest() {
+                return Err(VerifyError::InvalidParameterDigest);
+            }
+            Ok(())
+        } else {
+            if self.application_parameters.is_some() {
+                // Not signed, application parameters present - check parameter digest
+                for component in &self.name.components {
+                    if let NameComponent::ParametersSha256DigestComponent(component) = component {
+                        if component.name == self.parameters_digest() {
+                            return Ok(());
+                        } else {
+                            return Err(VerifyError::InvalidParameterDigest);
+                        }
+                    }
+                }
+                // No digest present
+                Err(VerifyError::InvalidParameterDigest)
+            } else {
+                // Not signed, no application parameters - nothing to check
+                Ok(())
+            }
+        }
+    }
+
+    /// Verify the interest with a given sign method
+    ///
+    /// Returns `Ok(())` if the signature and the `ParametersSha256DigestComponent` of the name are
+    /// valid
+    pub fn verify_with_sign_method<T>(&self, sign_method: &T) -> Result<(), VerifyError>
+    where
+        T: SignMethod,
+    {
+        self.verify_param_digest()?;
+
+        if self.signature_info.is_none() {
+            // Not signed
+            return Ok(());
+        }
+
+        let Some(ref sig_value) = self.signature_value else {
+            // Signature missing
+            return Err(VerifyError::InvalidSignature);
+        };
+
+        let computed_signature = self.compute_signature(sign_method);
+        if computed_signature != sig_value.data {
+            println!("Expected: {:?}", hex::encode(computed_signature.clone()));
+            println!("Got:      {:?}", hex::encode(sig_value.data.clone()));
+            return Err(VerifyError::InvalidSignature);
+        }
+        Ok(())
+    }
+
+    /// Verify the interest
+    ///
+    /// This is a wrapper around `verify_with_sign_method` for sign methods provided by this crate.
+    /// Use `verify_with_sign_method` if the interest is signed with a method not provided.
+    pub fn verify(&self) -> Result<(), VerifyError> {
+        let Some(ref sig_info) = self.signature_info else {
+            return Err(VerifyError::MissingSignatureInfo);
+        };
+        match sig_info.signature_type.signature_type.value() {
+            0 => self.verify_with_sign_method(&DigestSha256::new()),
+            _ => Err(VerifyError::UnknownSignMethod),
         }
     }
 }
@@ -357,15 +410,16 @@ mod tests {
                 hop_limit: Some(HopLimit { limit: 20 }),
                 application_parameters: None,
                 signature_info: None,
+                signature_value: None,
             }
         );
     }
 
     #[test]
     fn sha256_interest() {
-        let interest = Interest::new(Name::from_str("ndn:/hello/world").unwrap());
+        let mut interest = Interest::new(Name::from_str("ndn:/hello/world").unwrap());
         let mut signer = DigestSha256::new();
-        let signed_interest = interest.sign(
+        interest.sign(
             &mut signer,
             SignSettings {
                 include_time: false,
@@ -373,6 +427,7 @@ mod tests {
                 include_seq_num: true,
             },
         );
+        assert!(interest.verify_with_sign_method(&mut signer).is_ok());
 
         let name_components = [
             8, 5, b'h', b'e', b'l', b'l', b'o', 8, 5, b'w', b'o', b'r', b'l', b'd', //
@@ -406,6 +461,6 @@ mod tests {
         full_record.extend([46, 32]);
         full_record.extend(signature);
 
-        assert_eq!(<Vec<u8>>::from(signed_interest.encode()), full_record);
+        assert_eq!(<Vec<u8>>::from(interest.encode()), full_record);
     }
 }
