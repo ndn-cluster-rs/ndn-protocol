@@ -187,6 +187,36 @@ impl Name {
         .collect();
         Url::parse(&format!("ndn:/{}", path)).unwrap()
     }
+
+    pub fn join<T: TryInto<Self>>(&self, other: T) -> Self
+    where
+        <T as TryInto<Self>>::Error: std::fmt::Debug,
+    {
+        let other = other.try_into().expect("Invalid name component string");
+
+        let mut components = Vec::with_capacity(self.components.len() + other.components.len());
+        components.extend_from_slice(&self.components);
+        components.extend_from_slice(&other.components);
+        Self { components }
+    }
+}
+
+impl From<NameComponent> for Name {
+    fn from(value: NameComponent) -> Self {
+        Name {
+            components: vec![value],
+        }
+    }
+}
+
+impl TryFrom<&str> for Name {
+    type Error = NdnError;
+
+    fn try_from(value: &str) -> std::result::Result<Name, NdnError> {
+        NameComponent::from_uri_part(value.as_bytes())
+            .ok_or(NdnError::ParseError)
+            .map(Into::into)
+    }
 }
 
 #[cfg(test)]
@@ -395,5 +425,28 @@ mod tests {
             }
         );
         assert_eq!(name.to_uri(), Url::parse(&format!("ndn:{}", uri)).unwrap());
+    }
+
+    #[test]
+    fn name_join_name() {
+        let name = Name::from_str("/hello").unwrap();
+        let name2 = Name::from_str("/world").unwrap();
+        assert_eq!(name.join(name2), Name::from_str("/hello/world").unwrap());
+    }
+
+    #[test]
+    fn name_join_component() {
+        let name = Name::from_str("/hello").unwrap();
+        let component = NameComponent::from_uri_part(b"world").unwrap();
+        assert_eq!(
+            name.join(component),
+            Name::from_str("/hello/world").unwrap()
+        );
+    }
+
+    #[test]
+    fn name_slash_str() {
+        let name = Name::from_str("/hello").unwrap();
+        assert_eq!(name.join("world"), Name::from_str("/hello/world").unwrap());
     }
 }
