@@ -1,10 +1,13 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use ndn_tlv::{find_tlv, NonNegativeInteger, Tlv, TlvDecode, TlvEncode, VarNum};
+use rand::{Rng, SeedableRng};
 use sha2::{Digest, Sha256};
 
 use crate::{
     name::ParametersSha256DigestComponent,
-    signature::{InterestSignatureInfo, InterestSignatureValue, SignMethod, SignatureSeqNum},
+    signature::{
+        InterestSignatureInfo, InterestSignatureValue, SignMethod, SignatureNonce, SignatureSeqNum,
+    },
     Name, NameComponent, SignatureType,
 };
 
@@ -63,6 +66,23 @@ pub struct Interest {
 pub struct SignedInterest {
     interest: Interest,
     signature_value: InterestSignatureValue,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct SignSettings {
+    pub include_time: bool,
+    pub include_seq_num: bool,
+    pub nonce_length: usize,
+}
+
+impl Default for SignSettings {
+    fn default() -> Self {
+        Self {
+            include_time: true,
+            include_seq_num: true,
+            nonce_length: 8,
+        }
+    }
 }
 
 impl Tlv for SignedInterest {
@@ -175,7 +195,11 @@ impl Interest {
         self.hop_limit.as_ref().map(|x| x.limit)
     }
 
-    pub fn sign<T: SignMethod>(mut self, sign_method: &mut T) -> SignedInterest {
+    pub fn sign<T: SignMethod>(
+        mut self,
+        sign_method: &mut T,
+        settings: SignSettings,
+    ) -> SignedInterest {
         self.name
             .components
             .retain(|x| !matches!(x, NameComponent::ParametersSha256DigestComponent(_)));
@@ -183,15 +207,28 @@ impl Interest {
             self.application_parameters = Some(ApplicationParameters { data: Bytes::new() });
         }
 
+        let nonce = if settings.nonce_length > 0 {
+            let mut rng = rand::rngs::StdRng::from_entropy();
+            let mut data = BytesMut::with_capacity(settings.nonce_length);
+            for _ in 0..settings.nonce_length {
+                data.put_u8(rng.gen());
+            }
+            Some(SignatureNonce {
+                data: data.freeze(),
+            })
+        } else {
+            None
+        };
+
         let seq_num = sign_method.next_seq_num();
         self.signature_info = Some(InterestSignatureInfo {
             signature_type: SignatureType {
                 signature_type: T::SIGNATURE_TYPE.into(),
             },
             key_locator: sign_method.locator(),
-            nonce: None,
-            time: None, // Some(sign_method.time()),
-            seq_num: Some(SignatureSeqNum {
+            nonce,
+            time: settings.include_time.then(|| sign_method.time()),
+            seq_num: settings.include_seq_num.then(|| SignatureSeqNum {
                 data: seq_num.into(),
             }),
         });
@@ -279,7 +316,14 @@ mod tests {
     fn sha256_interest() {
         let interest = Interest::new(Name::from_str("ndn:/hello/world").unwrap());
         let mut signer = DigestSha256::new();
-        let signed_interest = interest.sign(&mut signer);
+        let signed_interest = interest.sign(
+            &mut signer,
+            SignSettings {
+                include_time: false,
+                nonce_length: 0,
+                include_seq_num: true,
+            },
+        );
 
         let name_components = [
             8, 5, b'h', b'e', b'l', b'l', b'o', 8, 5, b'w', b'o', b'r', b'l', b'd', //
