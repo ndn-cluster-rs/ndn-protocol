@@ -14,7 +14,7 @@ trait ToUriPart {
     fn to_uri_part(&self) -> String;
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(8)]
 pub struct GenericNameComponent {
     name: Bytes,
@@ -42,7 +42,7 @@ impl ToUriPart for GenericNameComponent {
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(1)]
 pub struct ImplicitSha256DigestComponent {
     name: [u8; 32],
@@ -67,7 +67,7 @@ impl ToUriPart for ImplicitSha256DigestComponent {
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(2)]
 pub struct ParametersSha256DigestComponent {
     pub(crate) name: [u8; 32],
@@ -92,7 +92,7 @@ impl ToUriPart for ParametersSha256DigestComponent {
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 pub enum NameComponent {
     GenericNameComponent(GenericNameComponent),
     ImplicitSha256DigestComponent(ImplicitSha256DigestComponent),

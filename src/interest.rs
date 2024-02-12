@@ -129,6 +129,46 @@ impl Interest {
         }
     }
 
+    /// Creates the `ParametersSha256DigestComponent` part of the name.
+    ///
+    /// The component will be automatically added to the name when signing the interest, so this is
+    /// only useful for unsigned interests.
+    pub fn make_parameters_digest(data: Bytes) -> ParametersSha256DigestComponent {
+        let mut hasher = Sha256::new();
+        hasher.update(VarNum::from(ApplicationParameters::TYP).encode());
+        hasher.update(VarNum::from(data.len()).encode());
+        hasher.update(&data);
+        ParametersSha256DigestComponent {
+            name: hasher.finalize().into(),
+        }
+    }
+
+    /// Adds a `ParametersSha256DigestComponent` to the end of the name
+    ///
+    /// The component will be automatically added to the name when signing the interest, so this is
+    /// only useful for unsigned interests.
+    ///
+    /// Empty application parameters will be set if none are set currently.
+    /// Any existing `ParametersSha256DigestComponent` will be removed.
+    pub fn add_parameters_digest(&mut self) -> &mut Self {
+        self.name
+            .components
+            .retain(|x| !matches!(x, NameComponent::ParametersSha256DigestComponent(_)));
+
+        if self.application_parameters.is_none() {
+            self.application_parameters = Some(ApplicationParameters { data: Bytes::new() });
+        }
+
+        self.name
+            .components
+            .push(NameComponent::ParametersSha256DigestComponent(
+                Self::make_parameters_digest(
+                    self.application_parameters.as_ref().unwrap().data.clone(),
+                ),
+            ));
+        self
+    }
+
     pub fn set_name(&mut self, name: Name) -> &mut Self {
         self.name = name;
         self
@@ -193,6 +233,15 @@ impl Interest {
 
     pub fn hop_limit(&self) -> Option<u8> {
         self.hop_limit.as_ref().map(|x| x.limit)
+    }
+
+    pub fn set_application_parameters(&mut self, params: Option<Bytes>) -> &mut Self {
+        self.application_parameters = params.map(|data| ApplicationParameters { data });
+        self
+    }
+
+    pub fn application_parameters(&self) -> Option<&Bytes> {
+        self.application_parameters.as_ref().map(|x| &x.data)
     }
 
     pub fn sign<T: SignMethod>(
