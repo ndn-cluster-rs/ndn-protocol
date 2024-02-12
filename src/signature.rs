@@ -1,5 +1,5 @@
 use bytes::{Buf, Bytes};
-use ndn_tlv::{Tlv, TlvEncode, VarNum};
+use ndn_tlv::{NonNegativeInteger, Tlv, TlvEncode, VarNum};
 
 use sha2::{Digest, Sha256};
 
@@ -51,7 +51,7 @@ pub struct SignatureNonce {
 #[derive(Debug, Tlv, PartialEq, Eq)]
 #[tlv(40)]
 pub struct SignatureTime {
-    pub(crate) data: VarNum,
+    pub(crate) data: NonNegativeInteger,
 }
 
 #[derive(Debug, Tlv, PartialEq, Eq)]
@@ -87,7 +87,7 @@ pub trait SignMethod {
 
     fn time(&self) -> SignatureTime {
         SignatureTime {
-            data: VarNum::from(
+            data: NonNegativeInteger::from(
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
