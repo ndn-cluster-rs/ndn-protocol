@@ -255,7 +255,7 @@ mod tests {
         interest
             .set_can_be_prefix(true)
             .set_hop_limit(Some(20))
-            .set_interest_lifetime(Some(10_000));
+            .set_interest_lifetime(Some(10_000u16.into()));
 
         assert_eq!(
             interest,
@@ -266,7 +266,7 @@ mod tests {
                 forwarding_hint: None,
                 nonce: None,
                 interest_lifetime: Some(InterestLifetime {
-                    lifetime: 10000.into()
+                    lifetime: 10_000u16.into()
                 }),
                 hop_limit: Some(HopLimit { limit: 20 }),
                 application_parameters: None,
@@ -281,24 +281,37 @@ mod tests {
         let mut signer = DigestSha256::new();
         let signed_interest = interest.sign(&mut signer);
 
-        let signable = [
-            7, 14, // Name
+        let name_components = [
             8, 5, b'h', b'e', b'l', b'l', b'o', 8, 5, b'w', b'o', b'r', b'l', b'd', //
+        ];
+
+        let app_params_plus = [
             36, 0, // ApplicationParameters
             44, 6, // SignatureInfo
-            27, 1, // Signature Type
-            0, //
+            27, 1, 0, // Signature Type
             42, 1, 0, // seq num
         ];
 
         let mut hasher = Sha256::new();
-        hasher.update(signable);
+        hasher.update(name_components);
+        hasher.update(app_params_plus);
+        let signature = hasher.finalize();
+
+        hasher = Sha256::new();
+        hasher.update(app_params_plus);
+        hasher.update([46, 32]);
+        hasher.update(signature);
+        let param_digest = hasher.finalize();
 
         let mut full_record = Vec::new();
-        full_record.extend([5, 62]);
-        full_record.extend(signable);
+        full_record.extend([5, 94]);
+        full_record.extend([7, 48]);
+        full_record.extend(name_components);
+        full_record.extend([2, 32]);
+        full_record.extend(param_digest);
+        full_record.extend(app_params_plus);
         full_record.extend([46, 32]);
-        full_record.extend(hasher.finalize());
+        full_record.extend(signature);
 
         assert_eq!(<Vec<u8>>::from(signed_interest.encode()), full_record);
     }
