@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
-use bytes::Bytes;
-use ndn_tlv::{Tlv, TlvEncode};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use ndn_tlv::{Tlv, TlvDecode, TlvEncode, VarNum};
 use url::Url;
 
 use crate::error::{NdnError, Result};
@@ -18,6 +18,12 @@ trait ToUriPart {
 #[tlv(8)]
 pub struct GenericNameComponent {
     name: Bytes,
+}
+
+impl GenericNameComponent {
+    pub fn new(name: Bytes) -> Self {
+        Self { name }
+    }
 }
 
 impl FromUriPart for GenericNameComponent {
@@ -92,11 +98,80 @@ impl ToUriPart for ParametersSha256DigestComponent {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct OtherNameComponent {
+    pub typ: VarNum,
+    pub length: VarNum,
+    pub data: Bytes,
+}
+
+impl FromUriPart for OtherNameComponent {
+    fn from_uri_part(segment: &[u8]) -> Option<OtherNameComponent> {
+        let (start, end) = segment.split_at(segment.partition_point(|x| *x == b'='));
+        let typ = std::str::from_utf8(&start[..start.len() - 1]).ok()?;
+        let length = end.len();
+
+        let mut buf = BytesMut::with_capacity(length);
+        buf.put(&end[..]);
+
+        Some(OtherNameComponent {
+            typ: VarNum::from(typ.parse::<u64>().ok()?),
+            length: VarNum::from(length),
+            data: buf.freeze(),
+        })
+    }
+}
+
+impl TlvEncode for OtherNameComponent {
+    fn encode(&self) -> Bytes {
+        let mut buf = BytesMut::with_capacity(self.size());
+        buf.put(self.typ.encode());
+        buf.put(self.length.encode());
+        buf.put(self.data.encode());
+        buf.freeze()
+    }
+
+    fn size(&self) -> usize {
+        self.typ.size() + self.length.size() + self.data.len()
+    }
+}
+
+impl TlvDecode for OtherNameComponent {
+    fn decode(bytes: &mut Bytes) -> ndn_tlv::Result<Self> {
+        let typ = VarNum::decode(bytes)?;
+        let length = VarNum::decode(bytes)?;
+
+        if bytes.remaining() < length.into() {
+            return Err(ndn_tlv::TlvError::UnexpectedEndOfStream);
+        }
+
+        let mut buf = BytesMut::with_capacity(length.into());
+        bytes.copy_to_slice(&mut buf);
+        Ok(Self {
+            typ,
+            length,
+            data: buf.freeze(),
+        })
+    }
+}
+
+impl ToUriPart for OtherNameComponent {
+    fn to_uri_part(&self) -> String {
+        format!(
+            "{}={}",
+            self.typ.value(),
+            urlencoding::encode_binary(&self.data)
+        )
+    }
+}
+
 #[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 pub enum NameComponent {
     GenericNameComponent(GenericNameComponent),
     ImplicitSha256DigestComponent(ImplicitSha256DigestComponent),
     ParametersSha256DigestComponent(ParametersSha256DigestComponent),
+    #[tlv(default)]
+    OtherNameComponent(OtherNameComponent),
 }
 
 impl FromUriPart for NameComponent {
@@ -122,7 +197,7 @@ impl FromUriPart for NameComponent {
                         .map(Self::ImplicitSha256DigestComponent),
                     2 => ParametersSha256DigestComponent::from_uri_part(segment)
                         .map(Self::ParametersSha256DigestComponent),
-                    _ => None,
+                    _ => OtherNameComponent::from_uri_part(segment).map(Self::OtherNameComponent),
                 }
             } else {
                 Some(NameComponent::GenericNameComponent(
@@ -139,11 +214,12 @@ impl ToUriPart for NameComponent {
             Self::GenericNameComponent(ref component) => component.to_uri_part(),
             Self::ImplicitSha256DigestComponent(ref component) => component.to_uri_part(),
             Self::ParametersSha256DigestComponent(ref component) => component.to_uri_part(),
+            Self::OtherNameComponent(ref component) => component.to_uri_part(),
         }
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(7)]
 pub struct Name {
     pub(crate) components: Vec<NameComponent>,
