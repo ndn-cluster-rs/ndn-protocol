@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use ndn_tlv::{NonNegativeInteger, Tlv, TlvDecode, TlvEncode, VarNum};
 
 use crate::{
@@ -25,8 +24,8 @@ pub struct FinalBlockId {
 
 #[derive(Debug, Tlv, PartialEq, Eq)]
 #[tlv(21)]
-pub struct Content {
-    pub data: Bytes,
+pub struct Content<T> {
+    pub data: T,
 }
 
 #[derive(Debug, Tlv, PartialEq, Eq, Default)]
@@ -39,16 +38,20 @@ pub struct MetaInfo {
 
 #[derive(Debug, Tlv, PartialEq, Eq)]
 #[tlv(6)]
-pub struct Data {
+pub struct Data<T> {
     name: Name,
     meta_info: Option<MetaInfo>,
-    content: Option<Content>,
+    content: Option<Content<T>>,
     signature_info: Option<SignatureInfo>,
     signature_value: Option<SignatureValue>,
 }
 
-impl Data {
-    pub fn new(name: Name, content: Bytes) -> Self {
+impl<T> Data<T>
+where
+    T: Clone,
+    T: TlvEncode,
+{
+    pub fn new(name: Name, content: T) -> Self {
         Data {
             name,
             meta_info: Some(MetaInfo {
@@ -82,11 +85,11 @@ impl Data {
         self
     }
 
-    pub fn content(&self) -> Option<Bytes> {
+    pub fn content(&self) -> Option<T> {
         self.content.as_ref().map(|x| x.data.clone())
     }
 
-    pub fn set_content(&mut self, content: Option<Bytes>) -> &mut Self {
+    pub fn set_content(&mut self, content: Option<T>) -> &mut Self {
         self.content = content.map(|data| Content { data });
         self
     }
