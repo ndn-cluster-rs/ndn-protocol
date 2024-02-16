@@ -1,7 +1,8 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, cmp::max};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use ndn_tlv::{Tlv, TlvDecode, TlvEncode, VarNum};
+use derive_more::From;
+use ndn_tlv::{NonNegativeInteger, Tlv, TlvDecode, TlvEncode, VarNum};
 use url::Url;
 
 use crate::error::{NdnError, Result};
@@ -45,6 +46,305 @@ impl ToUriPart for GenericNameComponent {
             self.name.clone()
         };
         urlencoding::encode_binary(&name).into_owned()
+    }
+}
+
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[tlv(32)]
+pub struct KeywordNameComponent {
+    name: Bytes,
+}
+
+impl KeywordNameComponent {
+    pub fn new(name: Bytes) -> Self {
+        Self { name }
+    }
+}
+
+impl FromUriPart for KeywordNameComponent {
+    fn from_uri_part(s: &[u8]) -> Option<Self> {
+        let name = if s.starts_with(b"32=") {
+            Bytes::copy_from_slice(&s[3..])
+        } else {
+            return None;
+        };
+        Some(Self { name })
+    }
+}
+
+impl ToUriPart for KeywordNameComponent {
+    fn to_uri_part(&self) -> String {
+        format!("32={}", urlencoding::encode_binary(&self.name))
+    }
+}
+
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[tlv(50)]
+pub struct SegmentNameComponent {
+    segment_number: NonNegativeInteger,
+}
+
+impl SegmentNameComponent {
+    pub fn new(segment_number: NonNegativeInteger) -> Self {
+        Self { segment_number }
+    }
+}
+
+impl From<u64> for SegmentNameComponent {
+    fn from(value: u64) -> Self {
+        Self::new(NonNegativeInteger::smallest_repr(value))
+    }
+}
+
+impl From<usize> for SegmentNameComponent {
+    fn from(value: usize) -> Self {
+        Self::new(NonNegativeInteger::smallest_repr(value as u64))
+    }
+}
+
+impl FromUriPart for SegmentNameComponent {
+    fn from_uri_part(s: &[u8]) -> Option<Self> {
+        let name = if s.starts_with(b"50=") {
+            let mut buf = [0; std::mem::size_of::<u64>()];
+            let slice = &s[3..];
+
+            let start_idx = max(0, buf.len() - slice.len());
+            for i in start_idx..buf.len() {
+                buf[i] = slice[i - start_idx];
+            }
+
+            NonNegativeInteger::smallest_repr(u64::from_be_bytes(buf))
+        } else if s.starts_with(b"seg=") {
+            let number = std::str::from_utf8(&s[4..]).ok()?.parse::<u64>().ok()?;
+            NonNegativeInteger::smallest_repr(number)
+        } else {
+            return None;
+        };
+        Some(Self {
+            segment_number: name,
+        })
+    }
+}
+
+impl ToUriPart for SegmentNameComponent {
+    fn to_uri_part(&self) -> String {
+        format!("seg={}", self.segment_number)
+    }
+}
+
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[tlv(50)]
+pub struct ByteOffsetNameComponent {
+    segment_number: NonNegativeInteger,
+}
+
+impl ByteOffsetNameComponent {
+    pub fn new(segment_number: NonNegativeInteger) -> Self {
+        Self { segment_number }
+    }
+}
+
+impl From<u64> for ByteOffsetNameComponent {
+    fn from(value: u64) -> Self {
+        Self::new(NonNegativeInteger::smallest_repr(value))
+    }
+}
+
+impl From<usize> for ByteOffsetNameComponent {
+    fn from(value: usize) -> Self {
+        Self::new(NonNegativeInteger::smallest_repr(value as u64))
+    }
+}
+
+impl FromUriPart for ByteOffsetNameComponent {
+    fn from_uri_part(s: &[u8]) -> Option<Self> {
+        let name = if s.starts_with(b"52=") {
+            let mut buf = [0; std::mem::size_of::<u64>()];
+            let slice = &s[3..];
+
+            let start_idx = max(0, buf.len() - slice.len());
+            for i in start_idx..buf.len() {
+                buf[i] = slice[i - start_idx];
+            }
+
+            NonNegativeInteger::smallest_repr(u64::from_be_bytes(buf))
+        } else if s.starts_with(b"off=") {
+            let number = std::str::from_utf8(&s[4..]).ok()?.parse::<u64>().ok()?;
+            NonNegativeInteger::smallest_repr(number)
+        } else {
+            return None;
+        };
+        Some(Self {
+            segment_number: name,
+        })
+    }
+}
+
+impl ToUriPart for ByteOffsetNameComponent {
+    fn to_uri_part(&self) -> String {
+        format!("off={}", self.segment_number)
+    }
+}
+
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[tlv(50)]
+pub struct VersionNameComponent {
+    segment_number: NonNegativeInteger,
+}
+
+impl VersionNameComponent {
+    pub fn new(segment_number: NonNegativeInteger) -> Self {
+        Self { segment_number }
+    }
+}
+
+impl From<u64> for VersionNameComponent {
+    fn from(value: u64) -> Self {
+        Self::new(NonNegativeInteger::smallest_repr(value))
+    }
+}
+
+impl From<usize> for VersionNameComponent {
+    fn from(value: usize) -> Self {
+        Self::new(NonNegativeInteger::smallest_repr(value as u64))
+    }
+}
+
+impl FromUriPart for VersionNameComponent {
+    fn from_uri_part(s: &[u8]) -> Option<Self> {
+        let name = if s.starts_with(b"54=") {
+            let mut buf = [0; std::mem::size_of::<u64>()];
+            let slice = &s[3..];
+
+            let start_idx = max(0, buf.len() - slice.len());
+            for i in start_idx..buf.len() {
+                buf[i] = slice[i - start_idx];
+            }
+
+            NonNegativeInteger::smallest_repr(u64::from_be_bytes(buf))
+        } else if s.starts_with(b"v=") {
+            let number = std::str::from_utf8(&s[2..]).ok()?.parse::<u64>().ok()?;
+            NonNegativeInteger::smallest_repr(number)
+        } else {
+            return None;
+        };
+        Some(Self {
+            segment_number: name,
+        })
+    }
+}
+
+impl ToUriPart for VersionNameComponent {
+    fn to_uri_part(&self) -> String {
+        format!("v={}", self.segment_number)
+    }
+}
+
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[tlv(50)]
+pub struct TimestampNameComponent {
+    segment_number: NonNegativeInteger,
+}
+
+impl TimestampNameComponent {
+    pub fn new(segment_number: NonNegativeInteger) -> Self {
+        Self { segment_number }
+    }
+}
+
+impl From<u64> for TimestampNameComponent {
+    fn from(value: u64) -> Self {
+        Self::new(NonNegativeInteger::smallest_repr(value))
+    }
+}
+
+impl From<usize> for TimestampNameComponent {
+    fn from(value: usize) -> Self {
+        Self::new(NonNegativeInteger::smallest_repr(value as u64))
+    }
+}
+
+impl FromUriPart for TimestampNameComponent {
+    fn from_uri_part(s: &[u8]) -> Option<Self> {
+        let name = if s.starts_with(b"56=") {
+            let mut buf = [0; std::mem::size_of::<u64>()];
+            let slice = &s[3..];
+
+            let start_idx = max(0, buf.len() - slice.len());
+            for i in start_idx..buf.len() {
+                buf[i] = slice[i - start_idx];
+            }
+
+            NonNegativeInteger::smallest_repr(u64::from_be_bytes(buf))
+        } else if s.starts_with(b"t=") {
+            let number = std::str::from_utf8(&s[2..]).ok()?.parse::<u64>().ok()?;
+            NonNegativeInteger::smallest_repr(number)
+        } else {
+            return None;
+        };
+        Some(Self {
+            segment_number: name,
+        })
+    }
+}
+
+impl ToUriPart for TimestampNameComponent {
+    fn to_uri_part(&self) -> String {
+        format!("t={}", self.segment_number)
+    }
+}
+
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[tlv(50)]
+pub struct SequenceNumNameComponent {
+    segment_number: NonNegativeInteger,
+}
+
+impl SequenceNumNameComponent {
+    pub fn new(segment_number: NonNegativeInteger) -> Self {
+        Self { segment_number }
+    }
+}
+
+impl From<u64> for SequenceNumNameComponent {
+    fn from(value: u64) -> Self {
+        Self::new(NonNegativeInteger::smallest_repr(value))
+    }
+}
+
+impl From<usize> for SequenceNumNameComponent {
+    fn from(value: usize) -> Self {
+        Self::new(NonNegativeInteger::smallest_repr(value as u64))
+    }
+}
+
+impl FromUriPart for SequenceNumNameComponent {
+    fn from_uri_part(s: &[u8]) -> Option<Self> {
+        let name = if s.starts_with(b"58=") {
+            let mut buf = [0; std::mem::size_of::<u64>()];
+            let slice = &s[3..];
+
+            let start_idx = max(0, buf.len() - slice.len());
+            for i in start_idx..buf.len() {
+                buf[i] = slice[i - start_idx];
+            }
+
+            NonNegativeInteger::smallest_repr(u64::from_be_bytes(buf))
+        } else if s.starts_with(b"seq=") {
+            let number = std::str::from_utf8(&s[4..]).ok()?.parse::<u64>().ok()?;
+            NonNegativeInteger::smallest_repr(number)
+        } else {
+            return None;
+        };
+        Some(Self {
+            segment_number: name,
+        })
+    }
+}
+
+impl ToUriPart for SequenceNumNameComponent {
+    fn to_uri_part(&self) -> String {
+        format!("seq={}", self.segment_number)
     }
 }
 
@@ -165,11 +465,17 @@ impl ToUriPart for OtherNameComponent {
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, From)]
 pub enum NameComponent {
     GenericNameComponent(GenericNameComponent),
     ImplicitSha256DigestComponent(ImplicitSha256DigestComponent),
     ParametersSha256DigestComponent(ParametersSha256DigestComponent),
+    KeywordNameComponent(KeywordNameComponent),
+    SegmentNameComponent(SegmentNameComponent),
+    ByteOffsetNameComponent(ByteOffsetNameComponent),
+    VersionNameComponent(VersionNameComponent),
+    TimestampNameComponent(TimestampNameComponent),
+    SequenceNumNameComponent(SequenceNumNameComponent),
     #[tlv(default)]
     OtherNameComponent(OtherNameComponent),
 }
@@ -182,6 +488,16 @@ impl FromUriPart for NameComponent {
         } else if segment.starts_with(b"params-sha256=") {
             ParametersSha256DigestComponent::from_uri_part(segment)
                 .map(Self::ParametersSha256DigestComponent)
+        } else if segment.starts_with(b"seg=") {
+            SegmentNameComponent::from_uri_part(segment).map(Self::SegmentNameComponent)
+        } else if segment.starts_with(b"off=") {
+            ByteOffsetNameComponent::from_uri_part(segment).map(Self::ByteOffsetNameComponent)
+        } else if segment.starts_with(b"v=") {
+            VersionNameComponent::from_uri_part(segment).map(Self::VersionNameComponent)
+        } else if segment.starts_with(b"t=") {
+            TimestampNameComponent::from_uri_part(segment).map(Self::TimestampNameComponent)
+        } else if segment.starts_with(b"seq=") {
+            SequenceNumNameComponent::from_uri_part(segment).map(Self::SequenceNumNameComponent)
         } else {
             let expr = regex::bytes::Regex::new(r"^([0-9]+)=").expect("failed to compile regex");
             if let Some(captures) = expr.captures(segment) {
@@ -197,6 +513,21 @@ impl FromUriPart for NameComponent {
                         .map(Self::ImplicitSha256DigestComponent),
                     2 => ParametersSha256DigestComponent::from_uri_part(segment)
                         .map(Self::ParametersSha256DigestComponent),
+                    32 => {
+                        KeywordNameComponent::from_uri_part(segment).map(Self::KeywordNameComponent)
+                    }
+                    50 => {
+                        SegmentNameComponent::from_uri_part(segment).map(Self::SegmentNameComponent)
+                    }
+                    52 => ByteOffsetNameComponent::from_uri_part(segment)
+                        .map(Self::ByteOffsetNameComponent),
+                    54 => {
+                        VersionNameComponent::from_uri_part(segment).map(Self::VersionNameComponent)
+                    }
+                    56 => TimestampNameComponent::from_uri_part(segment)
+                        .map(Self::TimestampNameComponent),
+                    58 => SequenceNumNameComponent::from_uri_part(segment)
+                        .map(Self::SequenceNumNameComponent),
                     _ => OtherNameComponent::from_uri_part(segment).map(Self::OtherNameComponent),
                 }
             } else {
@@ -214,6 +545,12 @@ impl ToUriPart for NameComponent {
             Self::GenericNameComponent(ref component) => component.to_uri_part(),
             Self::ImplicitSha256DigestComponent(ref component) => component.to_uri_part(),
             Self::ParametersSha256DigestComponent(ref component) => component.to_uri_part(),
+            Self::KeywordNameComponent(ref component) => component.to_uri_part(),
+            Self::SegmentNameComponent(ref component) => component.to_uri_part(),
+            Self::ByteOffsetNameComponent(ref component) => component.to_uri_part(),
+            Self::VersionNameComponent(ref component) => component.to_uri_part(),
+            Self::TimestampNameComponent(ref component) => component.to_uri_part(),
+            Self::SequenceNumNameComponent(ref component) => component.to_uri_part(),
             Self::OtherNameComponent(ref component) => component.to_uri_part(),
         }
     }
@@ -524,5 +861,259 @@ mod tests {
     fn name_slash_str() {
         let name = Name::from_str("/hello").unwrap();
         assert_eq!(name.join("world"), Name::from_str("/hello/world").unwrap());
+    }
+
+    #[test]
+    fn name_keyword() {
+        let uri = "ndn:/hello/32=PA/world";
+        let name = Name::from_str(&uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"hello"[..])
+                    }),
+                    NameComponent::KeywordNameComponent(KeywordNameComponent {
+                        name: Bytes::from(&b"PA"[..])
+                    }),
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"world"[..])
+                    }),
+                ]
+            }
+        );
+
+        assert_eq!(name.to_uri(), Url::parse(&uri).unwrap());
+    }
+
+    #[test]
+    fn name_segment() {
+        let uri = "ndn:/hello/seg=5/world";
+        let name = Name::from_str(&uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"hello"[..])
+                    }),
+                    NameComponent::SegmentNameComponent(SegmentNameComponent {
+                        segment_number: NonNegativeInteger::U8(5)
+                    }),
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"world"[..])
+                    }),
+                ]
+            }
+        );
+
+        assert_eq!(name.to_uri(), Url::parse(&uri).unwrap());
+    }
+
+    #[test]
+    fn name_segment_binary() {
+        let uri = "ndn:/hello/50=%05/world";
+        let name = Name::from_str(&uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"hello"[..])
+                    }),
+                    NameComponent::SegmentNameComponent(SegmentNameComponent {
+                        segment_number: NonNegativeInteger::U8(5)
+                    }),
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"world"[..])
+                    }),
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn name_offset() {
+        let uri = "ndn:/hello/off=5/world";
+        let name = Name::from_str(&uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"hello"[..])
+                    }),
+                    NameComponent::ByteOffsetNameComponent(ByteOffsetNameComponent {
+                        segment_number: NonNegativeInteger::U8(5)
+                    }),
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"world"[..])
+                    }),
+                ]
+            }
+        );
+
+        assert_eq!(name.to_uri(), Url::parse(&uri).unwrap());
+    }
+
+    #[test]
+    fn name_offset_binary() {
+        let uri = "ndn:/hello/52=%05/world";
+        let name = Name::from_str(&uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"hello"[..])
+                    }),
+                    NameComponent::ByteOffsetNameComponent(ByteOffsetNameComponent {
+                        segment_number: NonNegativeInteger::U8(5)
+                    }),
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"world"[..])
+                    }),
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn name_version() {
+        let uri = "ndn:/hello/v=5/world";
+        let name = Name::from_str(&uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"hello"[..])
+                    }),
+                    NameComponent::VersionNameComponent(VersionNameComponent {
+                        segment_number: NonNegativeInteger::U8(5)
+                    }),
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"world"[..])
+                    }),
+                ]
+            }
+        );
+
+        assert_eq!(name.to_uri(), Url::parse(&uri).unwrap());
+    }
+
+    #[test]
+    fn name_version_binary() {
+        let uri = "ndn:/hello/54=%05/world";
+        let name = Name::from_str(&uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"hello"[..])
+                    }),
+                    NameComponent::VersionNameComponent(VersionNameComponent {
+                        segment_number: NonNegativeInteger::U8(5)
+                    }),
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"world"[..])
+                    }),
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn name_timestamp() {
+        let uri = "ndn:/hello/t=5/world";
+        let name = Name::from_str(&uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"hello"[..])
+                    }),
+                    NameComponent::TimestampNameComponent(TimestampNameComponent {
+                        segment_number: NonNegativeInteger::U8(5)
+                    }),
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"world"[..])
+                    }),
+                ]
+            }
+        );
+
+        assert_eq!(name.to_uri(), Url::parse(&uri).unwrap());
+    }
+
+    #[test]
+    fn name_timestamp_binary() {
+        let uri = "ndn:/hello/56=%05/world";
+        let name = Name::from_str(&uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"hello"[..])
+                    }),
+                    NameComponent::TimestampNameComponent(TimestampNameComponent {
+                        segment_number: NonNegativeInteger::U8(5)
+                    }),
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"world"[..])
+                    }),
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn name_sequence_num() {
+        let uri = "ndn:/hello/seq=5/world";
+        let name = Name::from_str(&uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"hello"[..])
+                    }),
+                    NameComponent::SequenceNumNameComponent(SequenceNumNameComponent {
+                        segment_number: NonNegativeInteger::U8(5)
+                    }),
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"world"[..])
+                    }),
+                ]
+            }
+        );
+
+        assert_eq!(name.to_uri(), Url::parse(&uri).unwrap());
+    }
+
+    #[test]
+    fn name_sequence_num_binary() {
+        let uri = "ndn:/hello/58=%05/world";
+        let name = Name::from_str(&uri).unwrap();
+        assert_eq!(
+            name,
+            Name {
+                components: vec![
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"hello"[..])
+                    }),
+                    NameComponent::SequenceNumNameComponent(SequenceNumNameComponent {
+                        segment_number: NonNegativeInteger::U8(5)
+                    }),
+                    NameComponent::GenericNameComponent(GenericNameComponent {
+                        name: Bytes::from(&b"world"[..])
+                    }),
+                ]
+            }
+        );
     }
 }
