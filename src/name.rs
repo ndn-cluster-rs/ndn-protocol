@@ -480,6 +480,31 @@ pub enum NameComponent {
     OtherNameComponent(OtherNameComponent),
 }
 
+impl PartialOrd for NameComponent {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for NameComponent {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let mut self_repr = self.encode();
+        let mut other_repr = other.encode();
+
+        while self_repr.has_remaining() && other_repr.has_remaining() {
+            let self_cur = self_repr.get_u8();
+            let other_cur = other_repr.get_u8();
+
+            if self_cur < other_cur {
+                return std::cmp::Ordering::Less;
+            } else if self_cur > other_cur {
+                return std::cmp::Ordering::Greater;
+            }
+        }
+        std::cmp::Ordering::Equal
+    }
+}
+
 impl FromUriPart for NameComponent {
     fn from_uri_part(segment: &[u8]) -> Option<Self> {
         if segment.starts_with(b"sha256digest=") {
@@ -559,7 +584,32 @@ impl ToUriPart for NameComponent {
 #[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(7)]
 pub struct Name {
-    pub(crate) components: Vec<NameComponent>,
+    pub components: Vec<NameComponent>,
+}
+
+impl PartialOrd for Name {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Name {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let mut self_repr = self.encode();
+        let mut other_repr = other.encode();
+
+        while self_repr.has_remaining() && other_repr.has_remaining() {
+            let self_cur = self_repr.get_u8();
+            let other_cur = other_repr.get_u8();
+
+            if self_cur < other_cur {
+                return std::cmp::Ordering::Less;
+            } else if self_cur > other_cur {
+                return std::cmp::Ordering::Greater;
+            }
+        }
+        std::cmp::Ordering::Equal
+    }
 }
 
 impl Name {
@@ -1115,5 +1165,22 @@ mod tests {
                 ]
             }
         );
+    }
+
+    #[test]
+    fn name_order() {
+        let mut names = [
+            Name::from_str("ndn:/some/prefix/name/fgh").unwrap(),
+            Name::from_str("ndn:/some/prefix/name/asd").unwrap(),
+            Name::from_str("ndn:/some/prefix/name/sha256digest=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef").unwrap(),
+            Name::from_str("ndn:/some/prefix").unwrap(),
+        ];
+        names.sort();
+        assert_eq!(names, [
+            Name::from_str("ndn:/some/prefix").unwrap(),
+            Name::from_str("ndn:/some/prefix/name/asd").unwrap(),
+            Name::from_str("ndn:/some/prefix/name/fgh").unwrap(),
+            Name::from_str("ndn:/some/prefix/name/sha256digest=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef").unwrap(),
+        ]);
     }
 }
