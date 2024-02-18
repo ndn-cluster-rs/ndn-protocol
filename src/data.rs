@@ -1,7 +1,8 @@
 use ndn_tlv::{NonNegativeInteger, Tlv, TlvDecode, TlvEncode, VarNum};
 
 use crate::{
-    signature::SignMethod, Name, NameComponent, SignatureInfo, SignatureType, SignatureValue,
+    signature::SignMethod, Certificate, Name, NameComponent, SignatureInfo, SignatureType,
+    SignatureValue,
 };
 
 #[derive(Debug, Tlv, PartialEq, Eq)]
@@ -102,7 +103,7 @@ where
             signature_type: SignatureType {
                 signature_type: VarNum::from(S::SIGNATURE_TYPE),
             },
-            key_locator: sign_method.locator(),
+            key_locator: sign_method.certificate().locator(),
         });
 
         let mut signed_portion = self.encode();

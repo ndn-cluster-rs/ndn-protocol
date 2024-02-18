@@ -7,9 +7,13 @@ pub use name::{
     GenericNameComponent, ImplicitSha256DigestComponent, Name, NameComponent, OtherNameComponent,
 };
 pub use signature::{
-    DigestSha256, KeyDigest, KeyLocator, SignatureInfo, SignatureType, SignatureValue,
+    DigestSha256, KeyDigest, KeyLocator, SignatureInfo, SignatureSha256WithRsa, SignatureType,
+    SignatureValue,
 };
 
+pub use certificate::{Certificate, RsaCertificate, SafeBag};
+
+mod certificate;
 mod data;
 mod error;
 mod interest;

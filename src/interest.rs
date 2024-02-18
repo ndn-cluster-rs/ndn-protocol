@@ -8,8 +8,9 @@ use crate::{
     name::ParametersSha256DigestComponent,
     signature::{
         InterestSignatureInfo, InterestSignatureValue, SignMethod, SignatureNonce, SignatureSeqNum,
+        SignatureTime,
     },
-    DigestSha256, Name, NameComponent, SignatureType,
+    Certificate, Name, NameComponent, SignatureType,
 };
 
 #[derive(Debug, Tlv, PartialEq, Eq)]
@@ -272,11 +273,12 @@ impl Interest {
 
         // Generate sequence number
         let seq_num = sign_method.next_seq_num();
+
         self.signature_info = Some(InterestSignatureInfo {
             signature_type: SignatureType {
                 signature_type: T::SIGNATURE_TYPE.into(),
             },
-            key_locator: sign_method.locator(),
+            key_locator: sign_method.certificate().locator(),
             nonce,
             time: settings.include_time.then(|| sign_method.time()),
             seq_num: settings.include_seq_num.then(|| SignatureSeqNum {
@@ -347,7 +349,7 @@ impl Interest {
     pub fn verify_with_sign_method<T>(
         &self,
         sign_method: &T,
-        key: T::PublicKey,
+        cert: T::Certificate,
     ) -> Result<(), VerifyError>
     where
         T: SignMethod,
@@ -365,7 +367,7 @@ impl Interest {
         };
 
         sign_method
-            .verify(&self.signable_portion(), key, &sig_value.data)
+            .verify(&self.signable_portion(), cert, &sig_value.data)
             .then_some(())
             .ok_or(VerifyError::InvalidSignature)
     }

@@ -1,9 +1,15 @@
 use bytes::Bytes;
 use ndn_tlv::{NonNegativeInteger, Tlv, TlvEncode, VarNum};
 
+use rand::SeedableRng;
+use rsa::{
+    pkcs1v15::{Signature, SigningKey},
+    signature::{RandomizedSigner, SignatureEncoding},
+    Pkcs1v15Sign,
+};
 use sha2::{Digest, Sha256};
 
-use crate::Name;
+use crate::{Certificate, Name, RsaCertificate};
 
 #[derive(Debug, Tlv, PartialEq, Eq)]
 #[tlv(27)]
@@ -78,15 +84,15 @@ pub struct InterestSignatureValue {
 
 pub trait SignMethod {
     const SIGNATURE_TYPE: u64;
-    type PublicKey;
-
-    fn locator(&self) -> Option<KeyLocator>;
+    type Certificate: Certificate;
 
     fn next_seq_num(&mut self) -> u64;
 
+    fn certificate(&self) -> &Self::Certificate;
+
     fn sign(&self, data: &[u8]) -> Bytes;
 
-    fn verify(&self, data: &[u8], key: Self::PublicKey, signature: &[u8]) -> bool;
+    fn verify(&self, data: &[u8], cert: Self::Certificate, signature: &[u8]) -> bool;
 
     fn time(&self) -> SignatureTime {
         SignatureTime {
@@ -112,11 +118,7 @@ impl DigestSha256 {
 
 impl SignMethod for DigestSha256 {
     const SIGNATURE_TYPE: u64 = 0;
-    type PublicKey = ();
-
-    fn locator(&self) -> Option<KeyLocator> {
-        None
-    }
+    type Certificate = ();
 
     fn next_seq_num(&mut self) -> u64 {
         let seq_num = self.seq_num;
@@ -131,9 +133,59 @@ impl SignMethod for DigestSha256 {
         Bytes::copy_from_slice(&hasher.finalize())
     }
 
-    fn verify(&self, data: &[u8], _: Self::PublicKey, signature: &[u8]) -> bool {
+    fn verify(&self, data: &[u8], _: Self::Certificate, signature: &[u8]) -> bool {
         let hashed = self.sign(data);
         hashed == signature
     }
+
+    fn certificate(&self) -> &Self::Certificate {
+        &()
+    }
 }
+
+pub struct SignatureSha256WithRsa {
+    cert: RsaCertificate,
+    seq_num: u64,
+}
+
+impl SignatureSha256WithRsa {
+    pub fn new(cert: RsaCertificate) -> Self {
+        Self { cert, seq_num: 0 }
+    }
+}
+
+impl SignMethod for SignatureSha256WithRsa {
+    const SIGNATURE_TYPE: u64 = 1;
+
+    type Certificate = RsaCertificate;
+
+    fn next_seq_num(&mut self) -> u64 {
+        let seq_num = self.seq_num;
+        self.seq_num += 1;
+        seq_num
+    }
+
+    fn sign(&self, data: &[u8]) -> Bytes {
+        let private_key = self.cert.private_key().unwrap(); // TODO: Error handling
+        let signing_key = SigningKey::<Sha256>::new(private_key.clone());
+        let mut rng = rand::rngs::StdRng::from_entropy();
+
+        let output: Signature = signing_key.sign_with_rng(&mut rng, &data);
+        let outputvec = output.to_vec();
+        Bytes::from(outputvec)
+    }
+
+    fn verify(&self, data: &[u8], cert: Self::Certificate, signature: &[u8]) -> bool {
+        let mut hasher: Sha256 = Sha256::new();
+        hasher.update(data);
+        let hashed = hasher.finalize();
+
+        cert.public_key()
+            .verify(Pkcs1v15Sign::new::<Sha256>(), &hashed, &signature)
+            .is_ok()
+    }
+
+    fn certificate(&self) -> &Self::Certificate {
+        &self.cert
+    }
 }
