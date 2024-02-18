@@ -213,7 +213,7 @@ impl Interest {
         self.application_parameters.as_ref().map(|x| &x.data)
     }
 
-    fn compute_signature<T: SignMethod>(&self, sign_method: &T) -> Bytes {
+    fn signable_portion(&self) -> Bytes {
         let mut bytes = self.encode();
         let _ = VarNum::decode(&mut bytes);
         let _ = VarNum::decode(&mut bytes);
@@ -231,8 +231,7 @@ impl Interest {
             }
         }
         signature_buffer.put(&mut bytes);
-
-        sign_method.sign(signature_buffer.freeze())
+        signature_buffer.freeze()
     }
 
     fn parameters_digest(&self) -> [u8; 32] {
@@ -249,6 +248,7 @@ impl Interest {
     where
         T: SignMethod,
     {
+        // Delete existing params-sha256
         self.name
             .components
             .retain(|x| !matches!(x, NameComponent::ParametersSha256DigestComponent(_)));
@@ -256,6 +256,7 @@ impl Interest {
             self.application_parameters = Some(ApplicationParameters { data: Bytes::new() });
         }
 
+        // Generate nonce
         let nonce = if settings.nonce_length > 0 {
             let mut rng = rand::rngs::StdRng::from_entropy();
             let mut data = BytesMut::with_capacity(settings.nonce_length);
@@ -269,6 +270,7 @@ impl Interest {
             None
         };
 
+        // Generate sequence number
         let seq_num = sign_method.next_seq_num();
         self.signature_info = Some(InterestSignatureInfo {
             signature_type: SignatureType {
@@ -282,10 +284,12 @@ impl Interest {
             }),
         });
 
+        // Create signature
         self.signature_value = Some(InterestSignatureValue {
-            data: self.compute_signature(sign_method),
+            data: sign_method.sign(&self.signable_portion()),
         });
 
+        // Add new params-sha256
         self.name
             .components
             .push(NameComponent::ParametersSha256DigestComponent(
@@ -340,7 +344,11 @@ impl Interest {
     ///
     /// Returns `Ok(())` if the signature and the `ParametersSha256DigestComponent` of the name are
     /// valid
-    pub fn verify_with_sign_method<T>(&self, sign_method: &T) -> Result<(), VerifyError>
+    pub fn verify_with_sign_method<T>(
+        &self,
+        sign_method: &T,
+        key: T::PublicKey,
+    ) -> Result<(), VerifyError>
     where
         T: SignMethod,
     {
@@ -356,27 +364,10 @@ impl Interest {
             return Err(VerifyError::InvalidSignature);
         };
 
-        let computed_signature = self.compute_signature(sign_method);
-        if computed_signature != sig_value.data {
-            println!("Expected: {:?}", hex::encode(computed_signature.clone()));
-            println!("Got:      {:?}", hex::encode(sig_value.data.clone()));
-            return Err(VerifyError::InvalidSignature);
-        }
-        Ok(())
-    }
-
-    /// Verify the interest
-    ///
-    /// This is a wrapper around `verify_with_sign_method` for sign methods provided by this crate.
-    /// Use `verify_with_sign_method` if the interest is signed with a method not provided.
-    pub fn verify(&self) -> Result<(), VerifyError> {
-        let Some(ref sig_info) = self.signature_info else {
-            return Err(VerifyError::MissingSignatureInfo);
-        };
-        match sig_info.signature_type.signature_type.value() {
-            0 => self.verify_with_sign_method(&DigestSha256::new()),
-            _ => Err(VerifyError::UnknownSignMethod),
-        }
+        sign_method
+            .verify(&self.signable_portion(), key, &sig_value.data)
+            .then_some(())
+            .ok_or(VerifyError::InvalidSignature)
     }
 }
 
@@ -427,7 +418,7 @@ mod tests {
                 include_seq_num: true,
             },
         );
-        assert!(interest.verify_with_sign_method(&mut signer).is_ok());
+        assert!(interest.verify_with_sign_method(&mut signer, ()).is_ok());
 
         let name_components = [
             8, 5, b'h', b'e', b'l', b'l', b'o', 8, 5, b'w', b'o', b'r', b'l', b'd', //

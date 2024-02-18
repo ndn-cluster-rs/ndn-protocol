@@ -78,12 +78,15 @@ pub struct InterestSignatureValue {
 
 pub trait SignMethod {
     const SIGNATURE_TYPE: u64;
+    type PublicKey;
 
     fn locator(&self) -> Option<KeyLocator>;
 
     fn next_seq_num(&mut self) -> u64;
 
-    fn sign(&self, data: Bytes) -> Bytes;
+    fn sign(&self, data: &[u8]) -> Bytes;
+
+    fn verify(&self, data: &[u8], key: Self::PublicKey, signature: &[u8]) -> bool;
 
     fn time(&self) -> SignatureTime {
         SignatureTime {
@@ -109,6 +112,7 @@ impl DigestSha256 {
 
 impl SignMethod for DigestSha256 {
     const SIGNATURE_TYPE: u64 = 0;
+    type PublicKey = ();
 
     fn locator(&self) -> Option<KeyLocator> {
         None
@@ -120,10 +124,16 @@ impl SignMethod for DigestSha256 {
         seq_num
     }
 
-    fn sign(&self, data: Bytes) -> Bytes {
+    fn sign(&self, data: &[u8]) -> Bytes {
         let mut hasher = Sha256::new();
         hasher.update(data);
 
         Bytes::copy_from_slice(&hasher.finalize())
     }
+
+    fn verify(&self, data: &[u8], _: Self::PublicKey, signature: &[u8]) -> bool {
+        let hashed = self.sign(data);
+        hashed == signature
+    }
+}
 }
