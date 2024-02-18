@@ -133,7 +133,7 @@ impl ToUriPart for SegmentNameComponent {
 }
 
 #[derive(Debug, Tlv, PartialEq, Eq, Clone)]
-#[tlv(50)]
+#[tlv(52)]
 pub struct ByteOffsetNameComponent {
     segment_number: NonNegativeInteger,
 }
@@ -187,7 +187,7 @@ impl ToUriPart for ByteOffsetNameComponent {
 }
 
 #[derive(Debug, Tlv, PartialEq, Eq, Clone)]
-#[tlv(50)]
+#[tlv(54)]
 pub struct VersionNameComponent {
     segment_number: NonNegativeInteger,
 }
@@ -241,7 +241,7 @@ impl ToUriPart for VersionNameComponent {
 }
 
 #[derive(Debug, Tlv, PartialEq, Eq, Clone)]
-#[tlv(50)]
+#[tlv(56)]
 pub struct TimestampNameComponent {
     segment_number: NonNegativeInteger,
 }
@@ -295,7 +295,7 @@ impl ToUriPart for TimestampNameComponent {
 }
 
 #[derive(Debug, Tlv, PartialEq, Eq, Clone)]
-#[tlv(50)]
+#[tlv(58)]
 pub struct SequenceNumNameComponent {
     segment_number: NonNegativeInteger,
 }
