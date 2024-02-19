@@ -789,6 +789,20 @@ impl TryFrom<&str> for Name {
     }
 }
 
+impl FromIterator<NameComponent> for Name {
+    fn from_iter<T: IntoIterator<Item = NameComponent>>(iter: T) -> Self {
+        Self {
+            components: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl Extend<NameComponent> for Name {
+    fn extend<T: IntoIterator<Item = NameComponent>>(&mut self, iter: T) {
+        self.components.extend(iter)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
