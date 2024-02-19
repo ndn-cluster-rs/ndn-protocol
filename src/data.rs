@@ -1,3 +1,4 @@
+use derive_more::{AsMut, AsRef, Display, From, Into};
 use ndn_tlv::{NonNegativeInteger, Tlv, TlvDecode, TlvEncode, VarNum};
 
 use crate::{
@@ -5,31 +6,48 @@ use crate::{
     SignatureValue,
 };
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, Display, Default, From, Into, AsRef, AsMut)]
 #[tlv(24)]
+#[display(fmt = "{}", content_type)]
 pub struct ContentType {
     pub content_type: NonNegativeInteger,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(
+    Debug,
+    Tlv,
+    PartialEq,
+    Eq,
+    Clone,
+    Hash,
+    PartialOrd,
+    Ord,
+    Display,
+    Default,
+    From,
+    Into,
+    AsRef,
+    AsMut,
+)]
 #[tlv(25)]
+#[display(fmt = "{}", freshness_period)]
 pub struct FreshnessPeriod {
     pub freshness_period: NonNegativeInteger,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut)]
 #[tlv(26)]
 pub struct FinalBlockId {
     pub final_block_id: NameComponent,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, Default, From, AsRef, AsMut)]
 #[tlv(21)]
 pub struct Content<T> {
     pub data: T,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Default, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Default, Clone, Hash)]
 #[tlv(20)]
 pub struct MetaInfo {
     pub content_type: Option<ContentType>,
@@ -37,7 +55,7 @@ pub struct MetaInfo {
     pub final_block_id: Option<FinalBlockId>,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash)]
 #[tlv(6)]
 pub struct Data<T> {
     name: Name,
@@ -45,6 +63,27 @@ pub struct Data<T> {
     content: Option<Content<T>>,
     signature_info: Option<SignatureInfo>,
     signature_value: Option<SignatureValue>,
+}
+
+impl ContentType {
+    pub const BLOB: Self = Self::new(0);
+    pub const LINK: Self = Self::new(1);
+    pub const KEY: Self = Self::new(2);
+    pub const NACK: Self = Self::new(3);
+
+    pub const fn new(typ: u64) -> Self {
+        Self {
+            content_type: NonNegativeInteger::new(typ),
+        }
+    }
+}
+
+impl FreshnessPeriod {
+    pub fn new(period: u64) -> Self {
+        Self {
+            freshness_period: NonNegativeInteger::new(period),
+        }
+    }
 }
 
 impl<T> Data<T>
@@ -99,12 +138,10 @@ where
     where
         S: SignMethod,
     {
-        self.signature_info = Some(SignatureInfo {
-            signature_type: SignatureType {
-                signature_type: VarNum::from(S::SIGNATURE_TYPE),
-            },
-            key_locator: sign_method.certificate().locator(),
-        });
+        self.signature_info = Some(SignatureInfo::new(
+            SignatureType::new(VarNum::from(S::SIGNATURE_TYPE)),
+            sign_method.certificate().locator(),
+        ));
 
         let mut signed_portion = self.encode();
 
@@ -115,6 +152,6 @@ where
         println!("signed portion: {:?}", &signed_portion);
 
         let signature = sign_method.sign(&signed_portion);
-        self.signature_value = Some(SignatureValue { data: signature });
+        self.signature_value = Some(SignatureValue::new(signature));
     }
 }

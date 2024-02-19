@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use derive_more::{AsMut, AsRef, Constructor, Display, From, Into};
 use ndn_tlv::{NonNegativeInteger, Tlv, TlvEncode, VarNum};
 
 use rand::SeedableRng;
@@ -11,62 +12,94 @@ use sha2::{Digest, Sha256};
 
 use crate::{Certificate, Name, RsaCertificate};
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(
+    Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut, Display, Constructor,
+)]
 #[tlv(27)]
 pub struct SignatureType {
-    pub(crate) signature_type: VarNum,
+    signature_type: VarNum,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut, Constructor)]
 #[tlv(29)]
 pub struct KeyDigest {
-    pub(crate) data: Bytes,
+    data: Bytes,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash)]
 pub enum KeyLocatorData {
     Name(Name),
     KeyDigest(KeyDigest),
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, AsRef, AsMut, Constructor, From, Into)]
 #[tlv(28)]
 pub struct KeyLocator {
-    pub(crate) locator: KeyLocatorData,
+    locator: KeyLocatorData,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, Constructor)]
 #[tlv(22)]
 pub struct SignatureInfo {
-    pub(crate) signature_type: SignatureType,
-    pub(crate) key_locator: Option<KeyLocator>,
+    signature_type: SignatureType,
+    key_locator: Option<KeyLocator>,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, AsRef, AsMut, Constructor, From, Into)]
 #[tlv(23)]
 pub struct SignatureValue {
-    pub(crate) data: Bytes,
+    data: Bytes,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, AsRef, AsMut, Constructor, From, Into)]
 #[tlv(38)]
 pub struct SignatureNonce {
-    pub(crate) data: Bytes,
+    data: Bytes,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(
+    Debug,
+    Tlv,
+    PartialEq,
+    Eq,
+    Clone,
+    Hash,
+    AsRef,
+    AsMut,
+    Constructor,
+    From,
+    Into,
+    Display,
+    PartialOrd,
+    Ord,
+)]
 #[tlv(40)]
 pub struct SignatureTime {
-    pub(crate) data: NonNegativeInteger,
+    data: NonNegativeInteger,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(
+    Debug,
+    Tlv,
+    PartialEq,
+    Eq,
+    Clone,
+    Hash,
+    From,
+    Into,
+    AsRef,
+    AsMut,
+    Constructor,
+    PartialOrd,
+    Ord,
+    Display,
+)]
 #[tlv(42)]
 pub struct SignatureSeqNum {
-    pub(crate) data: VarNum,
+    data: VarNum,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, Constructor)]
 #[tlv(44)]
 pub struct InterestSignatureInfo {
     pub(crate) signature_type: SignatureType,
@@ -76,10 +109,10 @@ pub struct InterestSignatureInfo {
     pub(crate) seq_num: Option<SignatureSeqNum>,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut, Constructor)]
 #[tlv(46)]
 pub struct InterestSignatureValue {
-    pub(crate) data: Bytes,
+    data: Bytes,
 }
 
 pub trait SignMethod {

@@ -1,4 +1,5 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use derive_more::{AsMut, AsRef, Constructor, From, Into};
 use ndn_tlv::{find_tlv, NonNegativeInteger, Tlv, TlvDecode, TlvEncode, VarNum};
 use rand::{Rng, SeedableRng};
 use sha2::{Digest, Sha256};
@@ -12,45 +13,75 @@ use crate::{
     Certificate, Name, NameComponent, SignatureType,
 };
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Copy, Constructor, Hash, Default)]
 #[tlv(33)]
 pub struct CanBePrefix;
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Copy, Constructor, Hash, Default)]
 #[tlv(18)]
 pub struct MustBeFresh;
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Constructor)]
 #[tlv(30)]
 pub struct ForwardingHint {
     name: Name,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Copy, Constructor, From, Into, AsRef, AsMut, Hash)]
 #[tlv(10)]
 pub struct Nonce {
     nonce: [u8; 4],
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(
+    Debug,
+    Tlv,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    Constructor,
+    From,
+    Into,
+    AsRef,
+    AsMut,
+    Hash,
+    PartialOrd,
+    Ord,
+)]
 #[tlv(12)]
 pub struct InterestLifetime {
     lifetime: NonNegativeInteger,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(
+    Debug,
+    Tlv,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    Constructor,
+    From,
+    Into,
+    AsRef,
+    AsMut,
+    Hash,
+    PartialOrd,
+    Ord,
+)]
 #[tlv(34)]
 pub struct HopLimit {
     limit: u8,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Hash, From, AsRef, AsMut, Constructor, Clone)]
 #[tlv(36)]
 pub struct ApplicationParameters<T> {
     data: T,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Hash, Clone)]
 #[tlv(5)]
 pub struct Interest<T> {
     name: Name,
@@ -65,7 +96,7 @@ pub struct Interest<T> {
     signature_value: Option<InterestSignatureValue>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Constructor, Hash)]
 pub struct SignSettings {
     pub include_time: bool,
     pub include_seq_num: bool,
@@ -304,9 +335,7 @@ where
             for _ in 0..settings.nonce_length {
                 data.put_u8(rng.gen());
             }
-            Some(SignatureNonce {
-                data: data.freeze(),
-            })
+            Some(SignatureNonce::new(data.freeze()))
         } else {
             None
         };
@@ -315,21 +344,19 @@ where
         let seq_num = sign_method.next_seq_num();
 
         self.signature_info = Some(InterestSignatureInfo {
-            signature_type: SignatureType {
-                signature_type: T::SIGNATURE_TYPE.into(),
-            },
+            signature_type: SignatureType::new(T::SIGNATURE_TYPE.into()),
             key_locator: sign_method.certificate().locator(),
             nonce,
             time: settings.include_time.then(|| sign_method.time()),
-            seq_num: settings.include_seq_num.then(|| SignatureSeqNum {
-                data: seq_num.into(),
-            }),
+            seq_num: settings
+                .include_seq_num
+                .then(|| SignatureSeqNum::new(seq_num.into())),
         });
 
         // Create signature
-        self.signature_value = Some(InterestSignatureValue {
-            data: sign_method.sign(&self.signable_portion()),
-        });
+        self.signature_value = Some(InterestSignatureValue::new(
+            sign_method.sign(&self.signable_portion()),
+        ));
 
         // Add new params-sha256
         self.name
@@ -408,7 +435,7 @@ where
         };
 
         sign_method
-            .verify(&self.signable_portion(), cert, &sig_value.data)
+            .verify(&self.signable_portion(), cert, sig_value.as_ref())
             .then_some(())
             .ok_or(VerifyError::InvalidSignature)
     }

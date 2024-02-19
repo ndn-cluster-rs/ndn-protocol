@@ -1,7 +1,11 @@
-use std::{borrow::Cow, cmp::max};
+use std::{
+    borrow::Cow,
+    cmp::max,
+    time::{Duration, SystemTime},
+};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use derive_more::From;
+use derive_more::{AsMut, AsRef, Display, From, Into};
 use ndn_tlv::{NonNegativeInteger, Tlv, TlvDecode, TlvEncode, VarNum};
 use url::Url;
 
@@ -15,7 +19,7 @@ trait ToUriPart {
     fn to_uri_part(&self) -> String;
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut)]
 #[tlv(8)]
 pub struct GenericNameComponent {
     name: Bytes,
@@ -49,7 +53,7 @@ impl ToUriPart for GenericNameComponent {
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut)]
 #[tlv(32)]
 pub struct KeywordNameComponent {
     name: Bytes,
@@ -78,7 +82,22 @@ impl ToUriPart for KeywordNameComponent {
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(
+    Debug,
+    Tlv,
+    PartialEq,
+    Eq,
+    Clone,
+    Hash,
+    Default,
+    PartialOrd,
+    Ord,
+    From,
+    Into,
+    AsRef,
+    AsMut,
+    Display,
+)]
 #[tlv(50)]
 pub struct SegmentNameComponent {
     segment_number: NonNegativeInteger,
@@ -92,13 +111,13 @@ impl SegmentNameComponent {
 
 impl From<u64> for SegmentNameComponent {
     fn from(value: u64) -> Self {
-        Self::new(NonNegativeInteger::smallest_repr(value))
+        Self::new(NonNegativeInteger::new(value))
     }
 }
 
 impl From<usize> for SegmentNameComponent {
     fn from(value: usize) -> Self {
-        Self::new(NonNegativeInteger::smallest_repr(value as u64))
+        Self::new(NonNegativeInteger::new(value as u64))
     }
 }
 
@@ -113,10 +132,10 @@ impl FromUriPart for SegmentNameComponent {
                 buf[i] = slice[i - start_idx];
             }
 
-            NonNegativeInteger::smallest_repr(u64::from_be_bytes(buf))
+            NonNegativeInteger::new(u64::from_be_bytes(buf))
         } else if s.starts_with(b"seg=") {
             let number = std::str::from_utf8(&s[4..]).ok()?.parse::<u64>().ok()?;
-            NonNegativeInteger::smallest_repr(number)
+            NonNegativeInteger::new(number)
         } else {
             return None;
         };
@@ -132,27 +151,42 @@ impl ToUriPart for SegmentNameComponent {
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(
+    Debug,
+    Tlv,
+    PartialEq,
+    Eq,
+    Clone,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+    From,
+    Into,
+    AsRef,
+    AsMut,
+    Display,
+)]
 #[tlv(52)]
 pub struct ByteOffsetNameComponent {
-    segment_number: NonNegativeInteger,
+    offset: NonNegativeInteger,
 }
 
 impl ByteOffsetNameComponent {
-    pub fn new(segment_number: NonNegativeInteger) -> Self {
-        Self { segment_number }
+    pub fn new(offset: NonNegativeInteger) -> Self {
+        Self { offset }
     }
 }
 
 impl From<u64> for ByteOffsetNameComponent {
     fn from(value: u64) -> Self {
-        Self::new(NonNegativeInteger::smallest_repr(value))
+        Self::new(NonNegativeInteger::new(value))
     }
 }
 
 impl From<usize> for ByteOffsetNameComponent {
     fn from(value: usize) -> Self {
-        Self::new(NonNegativeInteger::smallest_repr(value as u64))
+        Self::new(NonNegativeInteger::new(value as u64))
     }
 }
 
@@ -167,46 +201,59 @@ impl FromUriPart for ByteOffsetNameComponent {
                 buf[i] = slice[i - start_idx];
             }
 
-            NonNegativeInteger::smallest_repr(u64::from_be_bytes(buf))
+            NonNegativeInteger::new(u64::from_be_bytes(buf))
         } else if s.starts_with(b"off=") {
             let number = std::str::from_utf8(&s[4..]).ok()?.parse::<u64>().ok()?;
-            NonNegativeInteger::smallest_repr(number)
+            NonNegativeInteger::new(number)
         } else {
             return None;
         };
-        Some(Self {
-            segment_number: name,
-        })
+        Some(Self { offset: name })
     }
 }
 
 impl ToUriPart for ByteOffsetNameComponent {
     fn to_uri_part(&self) -> String {
-        format!("off={}", self.segment_number)
+        format!("off={}", self.offset)
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(
+    Debug,
+    Tlv,
+    PartialEq,
+    Eq,
+    Clone,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+    From,
+    Into,
+    AsRef,
+    AsMut,
+    Display,
+)]
 #[tlv(54)]
 pub struct VersionNameComponent {
-    segment_number: NonNegativeInteger,
+    version: NonNegativeInteger,
 }
 
 impl VersionNameComponent {
-    pub fn new(segment_number: NonNegativeInteger) -> Self {
-        Self { segment_number }
+    pub fn new(version: NonNegativeInteger) -> Self {
+        Self { version }
     }
 }
 
 impl From<u64> for VersionNameComponent {
     fn from(value: u64) -> Self {
-        Self::new(NonNegativeInteger::smallest_repr(value))
+        Self::new(NonNegativeInteger::new(value))
     }
 }
 
 impl From<usize> for VersionNameComponent {
     fn from(value: usize) -> Self {
-        Self::new(NonNegativeInteger::smallest_repr(value as u64))
+        Self::new(NonNegativeInteger::new(value as u64))
     }
 }
 
@@ -221,46 +268,61 @@ impl FromUriPart for VersionNameComponent {
                 buf[i] = slice[i - start_idx];
             }
 
-            NonNegativeInteger::smallest_repr(u64::from_be_bytes(buf))
+            NonNegativeInteger::new(u64::from_be_bytes(buf))
         } else if s.starts_with(b"v=") {
             let number = std::str::from_utf8(&s[2..]).ok()?.parse::<u64>().ok()?;
-            NonNegativeInteger::smallest_repr(number)
+            NonNegativeInteger::new(number)
         } else {
             return None;
         };
-        Some(Self {
-            segment_number: name,
-        })
+        Some(Self { version: name })
     }
 }
 
 impl ToUriPart for VersionNameComponent {
     fn to_uri_part(&self) -> String {
-        format!("v={}", self.segment_number)
+        format!("v={}", self.version)
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(
+    Debug, Tlv, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, From, Into, AsRef, AsMut, Display,
+)]
 #[tlv(56)]
 pub struct TimestampNameComponent {
-    segment_number: NonNegativeInteger,
+    time: NonNegativeInteger,
 }
 
 impl TimestampNameComponent {
-    pub fn new(segment_number: NonNegativeInteger) -> Self {
-        Self { segment_number }
+    pub fn new(time: NonNegativeInteger) -> Self {
+        Self { time }
+    }
+
+    pub fn now() -> Self {
+        Self::new(NonNegativeInteger::new(
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or(Duration::ZERO)
+                .as_millis() as u64,
+        ))
+    }
+}
+
+impl Default for TimestampNameComponent {
+    fn default() -> Self {
+        Self::now()
     }
 }
 
 impl From<u64> for TimestampNameComponent {
     fn from(value: u64) -> Self {
-        Self::new(NonNegativeInteger::smallest_repr(value))
+        Self::new(NonNegativeInteger::new(value))
     }
 }
 
 impl From<usize> for TimestampNameComponent {
     fn from(value: usize) -> Self {
-        Self::new(NonNegativeInteger::smallest_repr(value as u64))
+        Self::new(NonNegativeInteger::new(value as u64))
     }
 }
 
@@ -275,46 +337,59 @@ impl FromUriPart for TimestampNameComponent {
                 buf[i] = slice[i - start_idx];
             }
 
-            NonNegativeInteger::smallest_repr(u64::from_be_bytes(buf))
+            NonNegativeInteger::new(u64::from_be_bytes(buf))
         } else if s.starts_with(b"t=") {
             let number = std::str::from_utf8(&s[2..]).ok()?.parse::<u64>().ok()?;
-            NonNegativeInteger::smallest_repr(number)
+            NonNegativeInteger::new(number)
         } else {
             return None;
         };
-        Some(Self {
-            segment_number: name,
-        })
+        Some(Self { time: name })
     }
 }
 
 impl ToUriPart for TimestampNameComponent {
     fn to_uri_part(&self) -> String {
-        format!("t={}", self.segment_number)
+        format!("t={}", self.time)
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(
+    Debug,
+    Tlv,
+    PartialEq,
+    Eq,
+    Clone,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+    From,
+    Into,
+    AsRef,
+    AsMut,
+    Display,
+)]
 #[tlv(58)]
 pub struct SequenceNumNameComponent {
-    segment_number: NonNegativeInteger,
+    sequence_number: NonNegativeInteger,
 }
 
 impl SequenceNumNameComponent {
-    pub fn new(segment_number: NonNegativeInteger) -> Self {
-        Self { segment_number }
+    pub fn new(sequence_number: NonNegativeInteger) -> Self {
+        Self { sequence_number }
     }
 }
 
 impl From<u64> for SequenceNumNameComponent {
     fn from(value: u64) -> Self {
-        Self::new(NonNegativeInteger::smallest_repr(value))
+        Self::new(NonNegativeInteger::new(value))
     }
 }
 
 impl From<usize> for SequenceNumNameComponent {
     fn from(value: usize) -> Self {
-        Self::new(NonNegativeInteger::smallest_repr(value as u64))
+        Self::new(NonNegativeInteger::new(value as u64))
     }
 }
 
@@ -329,26 +404,26 @@ impl FromUriPart for SequenceNumNameComponent {
                 buf[i] = slice[i - start_idx];
             }
 
-            NonNegativeInteger::smallest_repr(u64::from_be_bytes(buf))
+            NonNegativeInteger::new(u64::from_be_bytes(buf))
         } else if s.starts_with(b"seq=") {
             let number = std::str::from_utf8(&s[4..]).ok()?.parse::<u64>().ok()?;
-            NonNegativeInteger::smallest_repr(number)
+            NonNegativeInteger::new(number)
         } else {
             return None;
         };
         Some(Self {
-            segment_number: name,
+            sequence_number: name,
         })
     }
 }
 
 impl ToUriPart for SequenceNumNameComponent {
     fn to_uri_part(&self) -> String {
-        format!("seq={}", self.segment_number)
+        format!("seq={}", self.sequence_number)
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut)]
 #[tlv(1)]
 pub struct ImplicitSha256DigestComponent {
     name: [u8; 32],
@@ -373,7 +448,17 @@ impl ToUriPart for ImplicitSha256DigestComponent {
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+impl std::fmt::Display for ImplicitSha256DigestComponent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "{}", hex::encode_upper(self.name))
+        } else {
+            write!(f, "{}", hex::encode(self.name))
+        }
+    }
+}
+
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut)]
 #[tlv(2)]
 pub struct ParametersSha256DigestComponent {
     pub(crate) name: [u8; 32],
@@ -398,7 +483,17 @@ impl ToUriPart for ParametersSha256DigestComponent {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+impl std::fmt::Display for ParametersSha256DigestComponent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "{}", hex::encode_upper(self.name))
+        } else {
+            write!(f, "{}", hex::encode(self.name))
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct OtherNameComponent {
     pub typ: VarNum,
     pub length: VarNum,
@@ -465,7 +560,7 @@ impl ToUriPart for OtherNameComponent {
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone, From)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, From, Hash)]
 pub enum NameComponent {
     GenericNameComponent(GenericNameComponent),
     ImplicitSha256DigestComponent(ImplicitSha256DigestComponent),
@@ -581,7 +676,7 @@ impl ToUriPart for NameComponent {
     }
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash)]
 #[tlv(7)]
 pub struct Name {
     pub components: Vec<NameComponent>,
@@ -649,6 +744,18 @@ impl Name {
         )
         .collect();
         Url::parse(&format!("ndn:/{}", path)).unwrap()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &NameComponent> {
+        self.components.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut NameComponent> {
+        self.components.iter_mut()
+    }
+
+    pub fn into_iter(self) -> impl Iterator<Item = NameComponent> {
+        self.components.into_iter()
     }
 
     pub fn join<T: TryInto<Self>>(&self, other: T) -> Self
@@ -995,7 +1102,7 @@ mod tests {
                         name: Bytes::from(&b"hello"[..])
                     }),
                     NameComponent::ByteOffsetNameComponent(ByteOffsetNameComponent {
-                        segment_number: NonNegativeInteger::U8(5)
+                        offset: NonNegativeInteger::U8(5)
                     }),
                     NameComponent::GenericNameComponent(GenericNameComponent {
                         name: Bytes::from(&b"world"[..])
@@ -1019,7 +1126,7 @@ mod tests {
                         name: Bytes::from(&b"hello"[..])
                     }),
                     NameComponent::ByteOffsetNameComponent(ByteOffsetNameComponent {
-                        segment_number: NonNegativeInteger::U8(5)
+                        offset: NonNegativeInteger::U8(5)
                     }),
                     NameComponent::GenericNameComponent(GenericNameComponent {
                         name: Bytes::from(&b"world"[..])
@@ -1041,7 +1148,7 @@ mod tests {
                         name: Bytes::from(&b"hello"[..])
                     }),
                     NameComponent::VersionNameComponent(VersionNameComponent {
-                        segment_number: NonNegativeInteger::U8(5)
+                        version: NonNegativeInteger::U8(5)
                     }),
                     NameComponent::GenericNameComponent(GenericNameComponent {
                         name: Bytes::from(&b"world"[..])
@@ -1065,7 +1172,7 @@ mod tests {
                         name: Bytes::from(&b"hello"[..])
                     }),
                     NameComponent::VersionNameComponent(VersionNameComponent {
-                        segment_number: NonNegativeInteger::U8(5)
+                        version: NonNegativeInteger::U8(5)
                     }),
                     NameComponent::GenericNameComponent(GenericNameComponent {
                         name: Bytes::from(&b"world"[..])
@@ -1087,7 +1194,7 @@ mod tests {
                         name: Bytes::from(&b"hello"[..])
                     }),
                     NameComponent::TimestampNameComponent(TimestampNameComponent {
-                        segment_number: NonNegativeInteger::U8(5)
+                        time: NonNegativeInteger::U8(5)
                     }),
                     NameComponent::GenericNameComponent(GenericNameComponent {
                         name: Bytes::from(&b"world"[..])
@@ -1111,7 +1218,7 @@ mod tests {
                         name: Bytes::from(&b"hello"[..])
                     }),
                     NameComponent::TimestampNameComponent(TimestampNameComponent {
-                        segment_number: NonNegativeInteger::U8(5)
+                        time: NonNegativeInteger::U8(5)
                     }),
                     NameComponent::GenericNameComponent(GenericNameComponent {
                         name: Bytes::from(&b"world"[..])
@@ -1133,7 +1240,7 @@ mod tests {
                         name: Bytes::from(&b"hello"[..])
                     }),
                     NameComponent::SequenceNumNameComponent(SequenceNumNameComponent {
-                        segment_number: NonNegativeInteger::U8(5)
+                        sequence_number: NonNegativeInteger::U8(5)
                     }),
                     NameComponent::GenericNameComponent(GenericNameComponent {
                         name: Bytes::from(&b"world"[..])
@@ -1157,7 +1264,7 @@ mod tests {
                         name: Bytes::from(&b"hello"[..])
                     }),
                     NameComponent::SequenceNumNameComponent(SequenceNumNameComponent {
-                        segment_number: NonNegativeInteger::U8(5)
+                        sequence_number: NonNegativeInteger::U8(5)
                     }),
                     NameComponent::GenericNameComponent(GenericNameComponent {
                         name: Bytes::from(&b"world"[..])

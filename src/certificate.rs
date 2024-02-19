@@ -7,14 +7,14 @@ use rsa::{
 
 use crate::{signature::KeyLocatorData, Data, KeyLocator, Name};
 
-#[derive(Tlv)]
+#[derive(Tlv, Clone, Hash, Debug)]
 #[tlv(128)]
 pub struct SafeBag {
     certificate: Data<Bytes>,
     encrypted_key: EncryptedKey,
 }
 
-#[derive(Tlv)]
+#[derive(Tlv, Clone, Hash, Debug)]
 #[tlv(129)]
 pub struct EncryptedKey {
     data: Bytes,
@@ -48,7 +48,7 @@ impl Certificate for () {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Hash)]
 pub struct RsaCertificate {
     public_key: RsaPublicKey,
     private_key: Option<RsaPrivateKey>,
@@ -79,9 +79,7 @@ impl Certificate for RsaCertificate {
     type PrivateKey = RsaPrivateKey;
 
     fn locator(&self) -> Option<KeyLocator> {
-        Some(KeyLocator {
-            locator: KeyLocatorData::Name(self.name.clone()),
-        })
+        Some(KeyLocator::new(KeyLocatorData::Name(self.name.clone())))
     }
 
     fn public_key(&self) -> &Self::PublicKey {
