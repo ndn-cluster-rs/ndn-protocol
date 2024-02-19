@@ -17,6 +17,12 @@ impl From<url::ParseError> for NdnError {
 }
 
 #[derive(Error, Debug)]
+pub enum SignError {
+    #[error("No application parameters present")]
+    MissingApplicationParameters,
+}
+
+#[derive(Error, Debug)]
 pub enum VerifyError {
     #[error("The parameter digest is invalid")]
     InvalidParameterDigest,

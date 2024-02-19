@@ -4,11 +4,10 @@ use rand::{Rng, SeedableRng};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    error::VerifyError,
+    error::{SignError, VerifyError},
     name::ParametersSha256DigestComponent,
     signature::{
         InterestSignatureInfo, InterestSignatureValue, SignMethod, SignatureNonce, SignatureSeqNum,
-        SignatureTime,
     },
     Certificate, Name, NameComponent, SignatureType,
 };
@@ -47,13 +46,13 @@ pub struct HopLimit {
 
 #[derive(Debug, Tlv, PartialEq, Eq)]
 #[tlv(36)]
-pub struct ApplicationParameters {
-    data: Bytes,
+pub struct ApplicationParameters<T> {
+    data: T,
 }
 
 #[derive(Debug, Tlv, PartialEq, Eq)]
 #[tlv(5)]
-pub struct Interest {
+pub struct Interest<T> {
     name: Name,
     can_be_prefix: Option<CanBePrefix>,
     must_be_fresh: Option<MustBeFresh>,
@@ -61,7 +60,7 @@ pub struct Interest {
     nonce: Option<Nonce>,
     interest_lifetime: Option<InterestLifetime>,
     hop_limit: Option<HopLimit>,
-    application_parameters: Option<ApplicationParameters>,
+    application_parameters: Option<ApplicationParameters<T>>,
     signature_info: Option<InterestSignatureInfo>,
     signature_value: Option<InterestSignatureValue>,
 }
@@ -83,7 +82,11 @@ impl Default for SignSettings {
     }
 }
 
-impl Interest {
+impl<AppParamTy> Interest<AppParamTy>
+where
+    AppParamTy: TlvEncode,
+    AppParamTy: TlvDecode,
+{
     pub fn new(name: Name) -> Self {
         Self {
             name,
@@ -103,11 +106,11 @@ impl Interest {
     ///
     /// The component will be automatically added to the name when signing the interest, so this is
     /// only useful for unsigned interests.
-    pub fn make_parameters_digest(data: Bytes) -> ParametersSha256DigestComponent {
+    pub fn make_parameters_digest(data: AppParamTy) -> ParametersSha256DigestComponent {
         let mut hasher = Sha256::new();
-        hasher.update(VarNum::from(ApplicationParameters::TYP).encode());
-        hasher.update(VarNum::from(data.len()).encode());
-        hasher.update(&data);
+        hasher.update(VarNum::from(ApplicationParameters::<AppParamTy>::TYP).encode());
+        hasher.update(VarNum::from(data.size()).encode());
+        hasher.update(&data.encode());
         ParametersSha256DigestComponent {
             name: hasher.finalize().into(),
         }
@@ -120,14 +123,34 @@ impl Interest {
     ///
     /// Empty application parameters will be set if none are set currently.
     /// Any existing `ParametersSha256DigestComponent` will be removed.
-    pub fn add_parameters_digest(&mut self) -> &mut Self {
+    pub fn add_parameters_digest(&mut self) -> &mut Self
+    where
+        AppParamTy: Default,
+        AppParamTy: Clone,
+    {
+        if self.application_parameters.is_none() {
+            self.application_parameters = Some(ApplicationParameters {
+                data: AppParamTy::default(),
+            });
+        }
+
+        self.add_parameters_digest_unchecked()
+    }
+
+    /// Adds a `ParametersSha256DigestComponent` to the end of the name, assuming application
+    /// parameters already exist
+    ///
+    /// The component will be automatically added to the name when signing the interest, so this is
+    /// only useful for unsigned interests.
+    ///
+    /// Any existing `ParametersSha256DigestComponent` will be removed.
+    pub fn add_parameters_digest_unchecked(&mut self) -> &mut Self
+    where
+        AppParamTy: Clone,
+    {
         self.name
             .components
             .retain(|x| !matches!(x, NameComponent::ParametersSha256DigestComponent(_)));
-
-        if self.application_parameters.is_none() {
-            self.application_parameters = Some(ApplicationParameters { data: Bytes::new() });
-        }
 
         self.name
             .components
@@ -205,12 +228,12 @@ impl Interest {
         self.hop_limit.as_ref().map(|x| x.limit)
     }
 
-    pub fn set_application_parameters(&mut self, params: Option<Bytes>) -> &mut Self {
+    pub fn set_application_parameters(&mut self, params: Option<AppParamTy>) -> &mut Self {
         self.application_parameters = params.map(|data| ApplicationParameters { data });
         self
     }
 
-    pub fn application_parameters(&self) -> Option<&Bytes> {
+    pub fn application_parameters(&self) -> Option<&AppParamTy> {
         self.application_parameters.as_ref().map(|x| &x.data)
     }
 
@@ -218,7 +241,7 @@ impl Interest {
         let mut bytes = self.encode();
         let _ = VarNum::decode(&mut bytes);
         let _ = VarNum::decode(&mut bytes);
-        let _ = find_tlv::<ApplicationParameters>(&mut bytes, false);
+        let _ = find_tlv::<ApplicationParameters<AppParamTy>>(&mut bytes, false);
 
         let mut end = bytes.clone();
         let _ = find_tlv::<InterestSignatureValue>(&mut end, false);
@@ -239,7 +262,7 @@ impl Interest {
         let mut data = self.encode();
         let _ = VarNum::decode(&mut data);
         let _ = VarNum::decode(&mut data);
-        let _ = find_tlv::<ApplicationParameters>(&mut data, false);
+        let _ = find_tlv::<ApplicationParameters<AppParamTy>>(&mut data, false);
         let mut hasher = Sha256::new();
         hasher.update(&data);
         hasher.finalize().into()
@@ -248,13 +271,30 @@ impl Interest {
     pub fn sign<T>(&mut self, sign_method: &mut T, settings: SignSettings)
     where
         T: SignMethod,
+        AppParamTy: Default,
+    {
+        if self.application_parameters.is_none() {
+            self.set_application_parameters(Some(AppParamTy::default()));
+        }
+
+        self.sign_checked(sign_method, settings)
+            .expect("sign_checked failed from sign")
+    }
+
+    pub fn sign_checked<T>(
+        &mut self,
+        sign_method: &mut T,
+        settings: SignSettings,
+    ) -> Result<(), SignError>
+    where
+        T: SignMethod,
     {
         // Delete existing params-sha256
         self.name
             .components
             .retain(|x| !matches!(x, NameComponent::ParametersSha256DigestComponent(_)));
         if self.application_parameters.is_none() {
-            self.application_parameters = Some(ApplicationParameters { data: Bytes::new() });
+            return Err(SignError::MissingApplicationParameters);
         }
 
         // Generate nonce
@@ -299,6 +339,7 @@ impl Interest {
                     name: self.parameters_digest(),
                 },
             ));
+        Ok(())
     }
 
     pub fn is_signed(&self) -> bool {
@@ -383,7 +424,7 @@ mod tests {
 
     #[test]
     fn simple_usage() {
-        let mut interest = Interest::new(Name::from_str("ndn:/hello/world").unwrap());
+        let mut interest = Interest::<()>::new(Name::from_str("ndn:/hello/world").unwrap());
         interest
             .set_can_be_prefix(true)
             .set_hop_limit(Some(20))
@@ -410,7 +451,7 @@ mod tests {
 
     #[test]
     fn sha256_interest() {
-        let mut interest = Interest::new(Name::from_str("ndn:/hello/world").unwrap());
+        let mut interest = Interest::<()>::new(Name::from_str("ndn:/hello/world").unwrap());
         let mut signer = DigestSha256::new();
         interest.sign(
             &mut signer,

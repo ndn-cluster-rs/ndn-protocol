@@ -5,31 +5,31 @@ use crate::{
     SignatureValue,
 };
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(24)]
 pub struct ContentType {
     pub content_type: NonNegativeInteger,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(25)]
 pub struct FreshnessPeriod {
     pub freshness_period: NonNegativeInteger,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(26)]
 pub struct FinalBlockId {
     pub final_block_id: NameComponent,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(21)]
 pub struct Content<T> {
     pub data: T,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq, Default)]
+#[derive(Debug, Tlv, PartialEq, Eq, Default, Clone)]
 #[tlv(20)]
 pub struct MetaInfo {
     pub content_type: Option<ContentType>,
@@ -37,7 +37,7 @@ pub struct MetaInfo {
     pub final_block_id: Option<FinalBlockId>,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(6)]
 pub struct Data<T> {
     name: Name,

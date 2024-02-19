@@ -11,62 +11,62 @@ use sha2::{Digest, Sha256};
 
 use crate::{Certificate, Name, RsaCertificate};
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(27)]
 pub struct SignatureType {
     pub(crate) signature_type: VarNum,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(29)]
 pub struct KeyDigest {
     pub(crate) data: Bytes,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 pub enum KeyLocatorData {
     Name(Name),
     KeyDigest(KeyDigest),
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(28)]
 pub struct KeyLocator {
     pub(crate) locator: KeyLocatorData,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(22)]
 pub struct SignatureInfo {
     pub(crate) signature_type: SignatureType,
     pub(crate) key_locator: Option<KeyLocator>,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(23)]
 pub struct SignatureValue {
     pub(crate) data: Bytes,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(38)]
 pub struct SignatureNonce {
     pub(crate) data: Bytes,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(40)]
 pub struct SignatureTime {
     pub(crate) data: NonNegativeInteger,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(42)]
 pub struct SignatureSeqNum {
     pub(crate) data: VarNum,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(44)]
 pub struct InterestSignatureInfo {
     pub(crate) signature_type: SignatureType,
@@ -76,7 +76,7 @@ pub struct InterestSignatureInfo {
     pub(crate) seq_num: Option<SignatureSeqNum>,
 }
 
-#[derive(Debug, Tlv, PartialEq, Eq)]
+#[derive(Debug, Tlv, PartialEq, Eq, Clone)]
 #[tlv(46)]
 pub struct InterestSignatureValue {
     pub(crate) data: Bytes,
