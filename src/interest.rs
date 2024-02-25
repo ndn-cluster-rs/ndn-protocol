@@ -113,6 +113,46 @@ impl Default for SignSettings {
     }
 }
 
+impl Interest<Bytes> {
+    pub fn application_parameters_decode<T>(self) -> Interest<T>
+    where
+        T: TlvDecode,
+    {
+        Interest {
+            application_parameters: self
+                .application_parameters
+                .and_then(|mut x| T::decode(&mut x.data).ok())
+                .map(ApplicationParameters::new),
+            name: self.name,
+            can_be_prefix: self.can_be_prefix,
+            must_be_fresh: self.must_be_fresh,
+            forwarding_hint: self.forwarding_hint,
+            nonce: self.nonce,
+            interest_lifetime: self.interest_lifetime,
+            hop_limit: self.hop_limit,
+            signature_info: self.signature_info,
+            signature_value: self.signature_value,
+        }
+    }
+}
+
+impl<AppParamTy> Interest<AppParamTy> {
+    pub fn remove_application_parameters(self) -> Interest<()> {
+        Interest {
+            application_parameters: None,
+            name: self.name,
+            can_be_prefix: self.can_be_prefix,
+            must_be_fresh: self.must_be_fresh,
+            forwarding_hint: self.forwarding_hint,
+            nonce: self.nonce,
+            interest_lifetime: self.interest_lifetime,
+            hop_limit: self.hop_limit,
+            signature_info: self.signature_info,
+            signature_value: self.signature_value,
+        }
+    }
+}
+
 impl<AppParamTy> Interest<AppParamTy>
 where
     AppParamTy: TlvEncode,
