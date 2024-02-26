@@ -769,6 +769,18 @@ impl Name {
         components.extend_from_slice(&other.components);
         Self { components }
     }
+
+    pub fn has_prefix(&self, prefix: &Name) -> bool {
+        if prefix.components.len() > self.components.len() {
+            return false;
+        }
+        for (s, p) in self.components.iter().zip(prefix.iter()) {
+            if s != p {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 impl From<NameComponent> for Name {
