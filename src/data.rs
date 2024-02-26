@@ -149,8 +149,6 @@ where
         let _ = VarNum::decode(&mut signed_portion);
         let _ = VarNum::decode(&mut signed_portion);
 
-        println!("signed portion: {:?}", &signed_portion);
-
         let signature = sign_method.sign(&signed_portion);
         self.signature_value = Some(SignatureValue::new(signature));
     }
