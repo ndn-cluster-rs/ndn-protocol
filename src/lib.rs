@@ -13,9 +13,9 @@ pub use signature::{
 
 pub use certificate::{Certificate, RsaCertificate, SafeBag};
 
-mod certificate;
-mod data;
-mod error;
-mod interest;
-mod name;
-mod signature;
+pub mod certificate;
+pub mod data;
+pub mod error;
+pub mod interest;
+pub mod name;
+pub mod signature;
