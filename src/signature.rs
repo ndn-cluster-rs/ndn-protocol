@@ -45,6 +45,16 @@ pub struct SignatureInfo {
     key_locator: Option<KeyLocator>,
 }
 
+impl SignatureInfo {
+    pub fn signature_type(&self) -> VarNum {
+        self.signature_type.signature_type
+    }
+
+    pub fn key_locator(&self) -> Option<&KeyLocator> {
+        self.key_locator.as_ref()
+    }
+}
+
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, AsRef, AsMut, Constructor, From, Into)]
 #[tlv(23)]
 pub struct SignatureValue {
@@ -139,6 +149,28 @@ pub trait SignMethod {
     }
 }
 
+impl<T: SignMethod> SignMethod for &mut T {
+    const SIGNATURE_TYPE: u64 = T::SIGNATURE_TYPE;
+
+    type Certificate = T::Certificate;
+
+    fn next_seq_num(&mut self) -> u64 {
+        (**self).next_seq_num()
+    }
+
+    fn certificate(&self) -> &Self::Certificate {
+        (**self).certificate()
+    }
+
+    fn sign(&self, data: &[u8]) -> Bytes {
+        (**self).sign(data)
+    }
+
+    fn verify(&self, data: &[u8], cert: Self::Certificate, signature: &[u8]) -> bool {
+        (**self).verify(data, cert, signature)
+    }
+}
+
 pub struct DigestSha256 {
     seq_num: u64,
 }
@@ -176,6 +208,7 @@ impl SignMethod for DigestSha256 {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct SignatureSha256WithRsa {
     cert: RsaCertificate,
     seq_num: u64,

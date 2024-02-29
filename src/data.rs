@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use derive_more::{AsMut, AsRef, Display, From, Into};
 use ndn_tlv::{NonNegativeInteger, Tlv, TlvDecode, TlvEncode, VarNum};
 
@@ -86,6 +87,24 @@ impl FreshnessPeriod {
     }
 }
 
+impl Data<Bytes> {
+    pub fn content_decode<U>(self) -> Data<U>
+    where
+        U: TlvDecode,
+    {
+        Data {
+            content: self
+                .content
+                .and_then(|mut x| U::decode(&mut x.data).ok())
+                .map(|data| Content { data }),
+            name: self.name,
+            meta_info: self.meta_info,
+            signature_info: self.signature_info,
+            signature_value: self.signature_value,
+        }
+    }
+}
+
 impl<T> Data<T>
 where
     T: Clone,
@@ -151,5 +170,13 @@ where
 
         let signature = sign_method.sign(&signed_portion);
         self.signature_value = Some(SignatureValue::new(signature));
+    }
+
+    pub fn signature_info(&self) -> Option<&SignatureInfo> {
+        self.signature_info.as_ref()
+    }
+
+    pub fn is_signed(&self) -> bool {
+        self.signature_info.is_some()
     }
 }
