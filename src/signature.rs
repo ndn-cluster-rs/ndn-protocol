@@ -199,7 +199,7 @@ pub struct DigestSha256 {
 }
 
 impl DigestSha256 {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         DigestSha256 { seq_num: 0 }
     }
 }
@@ -238,7 +238,7 @@ pub struct SignatureSha256WithRsa {
 }
 
 impl SignatureSha256WithRsa {
-    pub fn new(cert: RsaCertificate) -> Self {
+    pub const fn new(cert: RsaCertificate) -> Self {
         Self { cert, seq_num: 0 }
     }
 }
