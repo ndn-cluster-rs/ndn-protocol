@@ -193,6 +193,7 @@ impl<T: SignMethod> SignMethod for &mut T {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct DigestSha256 {
     seq_num: u64,
 }
