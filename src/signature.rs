@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use derive_more::{AsMut, AsRef, Constructor, Display, From, Into};
-use ndn_tlv::{NonNegativeInteger, Tlv, TlvEncode, VarNum};
+use ndn_tlv::{NonNegativeInteger, Tlv, VarNum};
 
 use rand::SeedableRng;
 use rsa::{
@@ -106,7 +106,7 @@ pub struct SignatureTime {
 )]
 #[tlv(42)]
 pub struct SignatureSeqNum {
-    data: VarNum,
+    data: NonNegativeInteger,
 }
 
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, Constructor)]
@@ -136,7 +136,7 @@ impl InterestSignatureInfo {
         self.time.as_ref().map(|x| x.data)
     }
 
-    pub fn seq_num(&self) -> Option<VarNum> {
+    pub fn seq_num(&self) -> Option<NonNegativeInteger> {
         self.seq_num.as_ref().map(|x| x.data)
     }
 }
