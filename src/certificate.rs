@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use ndn_tlv::{Tlv, TlvEncode};
+use ndn_tlv::Tlv;
 use rsa::{
     pkcs8::{DecodePrivateKey, DecodePublicKey},
     RsaPrivateKey, RsaPublicKey,
@@ -10,14 +10,14 @@ use crate::{signature::KeyLocatorData, Data, KeyLocator, Name};
 #[derive(Tlv, Clone, Hash, Debug)]
 #[tlv(128)]
 pub struct SafeBag {
-    certificate: Data<Bytes>,
-    encrypted_key: EncryptedKey,
+    pub certificate: Data<Bytes>,
+    pub encrypted_key: EncryptedKey,
 }
 
 #[derive(Tlv, Clone, Hash, Debug)]
 #[tlv(129)]
 pub struct EncryptedKey {
-    data: Bytes,
+    pub data: Bytes,
 }
 
 pub trait Certificate {

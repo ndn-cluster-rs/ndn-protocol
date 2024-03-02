@@ -119,6 +119,28 @@ pub struct InterestSignatureInfo {
     pub(crate) seq_num: Option<SignatureSeqNum>,
 }
 
+impl InterestSignatureInfo {
+    pub fn signature_type(&self) -> VarNum {
+        self.signature_type.signature_type
+    }
+
+    pub fn key_locator(&self) -> Option<&KeyLocatorData> {
+        self.key_locator.as_ref().map(|x| &x.locator)
+    }
+
+    pub fn nonce(&self) -> Option<&Bytes> {
+        self.nonce.as_ref().map(|x| &x.data)
+    }
+
+    pub fn time(&self) -> Option<NonNegativeInteger> {
+        self.time.as_ref().map(|x| x.data)
+    }
+
+    pub fn seq_num(&self) -> Option<VarNum> {
+        self.seq_num.as_ref().map(|x| x.data)
+    }
+}
+
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut, Constructor)]
 #[tlv(46)]
 pub struct InterestSignatureValue {

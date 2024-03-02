@@ -426,7 +426,7 @@ impl ToUriPart for SequenceNumNameComponent {
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut)]
 #[tlv(1)]
 pub struct ImplicitSha256DigestComponent {
-    name: [u8; 32],
+    pub(crate) name: [u8; 32],
 }
 
 impl FromUriPart for ImplicitSha256DigestComponent {

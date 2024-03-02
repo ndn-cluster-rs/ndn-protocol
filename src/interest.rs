@@ -84,7 +84,7 @@ pub struct ApplicationParameters<T> {
 #[derive(Debug, Tlv, PartialEq, Eq, Hash, Clone)]
 #[tlv(5)]
 pub struct Interest<T> {
-    name: Name,
+    pub(crate) name: Name,
     can_be_prefix: Option<CanBePrefix>,
     must_be_fresh: Option<MustBeFresh>,
     forwarding_hint: Option<ForwardingHint>,
@@ -308,6 +308,10 @@ where
         self.application_parameters.as_ref().map(|x| &x.data)
     }
 
+    pub fn signature_info(&self) -> Option<&InterestSignatureInfo> {
+        self.signature_info.as_ref()
+    }
+
     fn signable_portion(&self) -> Bytes {
         let mut bytes = self.encode();
         let _ = VarNum::decode(&mut bytes);
@@ -479,13 +483,33 @@ where
             .then_some(())
             .ok_or(VerifyError::InvalidSignature)
     }
+
+    pub fn encode_application_parameters(self) -> Interest<Bytes> {
+        Interest {
+            name: self.name,
+            can_be_prefix: self.can_be_prefix,
+            must_be_fresh: self.must_be_fresh,
+            forwarding_hint: self.forwarding_hint,
+            nonce: self.nonce,
+            interest_lifetime: self.interest_lifetime,
+            hop_limit: self.hop_limit,
+            application_parameters: self.application_parameters.map(|params| {
+                ApplicationParameters {
+                    data: params.data.encode(),
+                }
+            }),
+            signature_info: self.signature_info,
+            signature_value: self.signature_value,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use base64::Engine;
     use sha2::{Digest, Sha256};
 
-    use crate::signature::DigestSha256;
+    use crate::{signature::DigestSha256, RsaCertificate, SafeBag, SignatureSha256WithRsa};
 
     use super::*;
 
@@ -563,5 +587,57 @@ mod tests {
         full_record.extend(signature);
 
         assert_eq!(<Vec<u8>>::from(interest.encode()), full_record);
+    }
+
+    #[test]
+    fn rsa_interest() {
+        const SAFEBAG: &[u8] = b"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\
+g==";
+
+        let safebag_data = base64::engine::general_purpose::STANDARD
+            .decode(SAFEBAG)
+            .unwrap();
+        let safebag = SafeBag::decode(&mut Bytes::from(safebag_data)).unwrap();
+
+        let cert = RsaCertificate::from_safebag(safebag, "test").unwrap();
+        let mut signer = SignatureSha256WithRsa::new(cert.clone());
+
+        let mut interest = Interest::<()>::new(Name::from_str("ndn:/test/test/asd").unwrap());
+        interest.sign(&mut signer, SignSettings::default());
+
+        assert!(interest.verify_with_sign_method(&signer, cert).is_ok());
     }
 }
