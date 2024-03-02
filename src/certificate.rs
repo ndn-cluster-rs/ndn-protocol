@@ -1,5 +1,8 @@
+use std::{io::BufReader, path::Path};
+
+use base64::Engine;
 use bytes::Bytes;
-use ndn_tlv::Tlv;
+use ndn_tlv::{Tlv, TlvDecode};
 use rsa::{
     pkcs8::{DecodePrivateKey, DecodePublicKey},
     RsaPrivateKey, RsaPublicKey,
@@ -71,6 +74,22 @@ impl RsaCertificate {
             private_key: Some(private_key),
         }
     }
+
+    pub fn from_safebag<P>(bag: SafeBag, password: P) -> Option<Self>
+    where
+        P: AsRef<[u8]>,
+    {
+        let name = bag.certificate.name().clone();
+        let key =
+            RsaPrivateKey::from_pkcs8_encrypted_der(&bag.encrypted_key.data, password).ok()?;
+        Some(Self::with_private(name, key))
+    }
+
+    pub fn from_data(data: Data<Bytes>) -> Option<Self> {
+        let name = data.name().clone();
+        let key = RsaPublicKey::from_public_key_der(&data.content()?).ok()?;
+        Some(Self::new(name, key))
+    }
 }
 
 impl Certificate for RsaCertificate {
@@ -91,20 +110,13 @@ impl Certificate for RsaCertificate {
     }
 }
 
-impl RsaCertificate {
-    pub fn from_safebag<P>(bag: SafeBag, password: P) -> Option<Self>
-    where
-        P: AsRef<[u8]>,
-    {
-        let name = bag.certificate.name().clone();
-        let key =
-            RsaPrivateKey::from_pkcs8_encrypted_der(&bag.encrypted_key.data, password).ok()?;
-        Some(Self::with_private(name, key))
-    }
-
-    pub fn from_data(data: Data<Bytes>) -> Option<Self> {
-        let name = data.name().clone();
-        let key = RsaPublicKey::from_public_key_der(&data.content()?).ok()?;
-        Some(Self::new(name, key))
+impl SafeBag {
+    pub fn load_file(path: impl AsRef<Path>) -> Option<Self> {
+        let mut file_content = std::fs::read(path).ok()?;
+        file_content.retain(|x| *x != b'\n' && *x != b'\r');
+        let safebag_data = base64::engine::general_purpose::STANDARD
+            .decode(&file_content)
+            .ok()?;
+        SafeBag::decode(&mut Bytes::from(safebag_data)).ok()
     }
 }

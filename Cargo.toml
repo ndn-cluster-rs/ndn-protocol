@@ -10,6 +10,7 @@ keywords = ["ndn", "named", "data", "networking"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+base64 = "0.21.7"
 bytes = "1.5.0"
 derive_more = "0.99.17"
 hex = "0.4.3"
