@@ -108,7 +108,6 @@ impl Data<Bytes> {
 
 impl<T> Data<T>
 where
-    T: Clone,
     T: TlvEncode,
 {
     pub fn new(name: Name, content: T) -> Self {
@@ -145,13 +144,25 @@ where
         self
     }
 
-    pub fn content(&self) -> Option<T> {
-        self.content.as_ref().map(|x| x.data.clone())
+    pub fn content(&self) -> Option<&T> {
+        self.content.as_ref().map(|x| &x.data)
     }
 
     pub fn set_content(&mut self, content: Option<T>) -> &mut Self {
         self.content = content.map(|data| Content { data });
         self
+    }
+
+    pub fn content_encode(self) -> Data<Bytes> {
+        Data {
+            name: self.name,
+            meta_info: self.meta_info,
+            content: self.content.map(|x| Content {
+                data: x.data.encode(),
+            }),
+            signature_info: self.signature_info,
+            signature_value: self.signature_value,
+        }
     }
 
     fn signable_portion(&self) -> Bytes {

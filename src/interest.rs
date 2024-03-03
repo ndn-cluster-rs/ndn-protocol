@@ -158,21 +158,6 @@ where
     AppParamTy: TlvEncode,
     AppParamTy: TlvDecode,
 {
-    pub fn new(name: Name) -> Self {
-        Self {
-            name,
-            can_be_prefix: None,
-            must_be_fresh: None,
-            forwarding_hint: None,
-            nonce: None,
-            interest_lifetime: None,
-            hop_limit: None,
-            application_parameters: None,
-            signature_info: None,
-            signature_value: None,
-        }
-    }
-
     /// Creates the `ParametersSha256DigestComponent` part of the name.
     ///
     /// The component will be automatically added to the name when signing the interest, so this is
@@ -231,85 +216,6 @@ where
                 ),
             ));
         self
-    }
-
-    pub fn set_name(&mut self, name: Name) -> &mut Self {
-        self.name = name;
-        self
-    }
-
-    pub fn name(&self) -> &Name {
-        &self.name
-    }
-
-    pub fn set_can_be_prefix(&mut self, can_be_prefix: bool) -> &mut Self {
-        self.can_be_prefix = can_be_prefix.then_some(CanBePrefix);
-        self
-    }
-
-    pub fn can_be_prefix(&self) -> bool {
-        self.can_be_prefix.is_some()
-    }
-
-    pub fn set_must_be_fresh(&mut self, must_be_fresh: bool) -> &mut Self {
-        self.must_be_fresh = must_be_fresh.then_some(MustBeFresh);
-        self
-    }
-
-    pub fn must_be_fresh(&self) -> bool {
-        self.must_be_fresh.is_some()
-    }
-
-    pub fn set_forwarding_hint(&mut self, forwarding_hint: Option<Name>) -> &mut Self {
-        self.forwarding_hint = forwarding_hint.map(|name| ForwardingHint { name });
-        self
-    }
-
-    pub fn forwarding_hint(&self) -> Option<&Name> {
-        self.forwarding_hint.as_ref().map(|x| &x.name)
-    }
-
-    pub fn set_nonce(&mut self, nonce: Option<[u8; 4]>) -> &mut Self {
-        self.nonce = nonce.map(|nonce| Nonce { nonce });
-        self
-    }
-
-    pub fn nonce(&self) -> Option<&[u8; 4]> {
-        self.nonce.as_ref().map(|x| &x.nonce)
-    }
-
-    pub fn set_interest_lifetime(
-        &mut self,
-        interest_lifetime: Option<NonNegativeInteger>,
-    ) -> &mut Self {
-        self.interest_lifetime = interest_lifetime.map(|lifetime| InterestLifetime { lifetime });
-        self
-    }
-
-    pub fn interest_lifetime(&self) -> Option<NonNegativeInteger> {
-        self.interest_lifetime.as_ref().map(|x| x.lifetime)
-    }
-
-    pub fn set_hop_limit(&mut self, hop_limit: Option<u8>) -> &mut Self {
-        self.hop_limit = hop_limit.map(|limit| HopLimit { limit });
-        self
-    }
-
-    pub fn hop_limit(&self) -> Option<u8> {
-        self.hop_limit.as_ref().map(|x| x.limit)
-    }
-
-    pub fn set_application_parameters(&mut self, params: Option<AppParamTy>) -> &mut Self {
-        self.application_parameters = params.map(|data| ApplicationParameters { data });
-        self
-    }
-
-    pub fn application_parameters(&self) -> Option<&AppParamTy> {
-        self.application_parameters.as_ref().map(|x| &x.data)
-    }
-
-    pub fn signature_info(&self) -> Option<&InterestSignatureInfo> {
-        self.signature_info.as_ref()
     }
 
     fn signable_portion(&self) -> Bytes {
@@ -413,10 +319,6 @@ where
         Ok(())
     }
 
-    pub fn is_signed(&self) -> bool {
-        self.signature_info.is_some()
-    }
-
     fn verify_param_digest(&self) -> Result<(), VerifyError> {
         if self.is_signed() {
             if self.application_parameters.is_none() {
@@ -501,6 +403,109 @@ where
             signature_info: self.signature_info,
             signature_value: self.signature_value,
         }
+    }
+}
+
+impl<AppParamTy> Interest<AppParamTy>
+where
+    AppParamTy: TlvDecode,
+{
+    pub fn new(name: Name) -> Self {
+        Self {
+            name,
+            can_be_prefix: None,
+            must_be_fresh: None,
+            forwarding_hint: None,
+            nonce: None,
+            interest_lifetime: None,
+            hop_limit: None,
+            application_parameters: None,
+            signature_info: None,
+            signature_value: None,
+        }
+    }
+
+    pub fn set_name(&mut self, name: Name) -> &mut Self {
+        self.name = name;
+        self
+    }
+
+    pub fn name(&self) -> &Name {
+        &self.name
+    }
+
+    pub fn set_can_be_prefix(&mut self, can_be_prefix: bool) -> &mut Self {
+        self.can_be_prefix = can_be_prefix.then_some(CanBePrefix);
+        self
+    }
+
+    pub fn can_be_prefix(&self) -> bool {
+        self.can_be_prefix.is_some()
+    }
+
+    pub fn set_must_be_fresh(&mut self, must_be_fresh: bool) -> &mut Self {
+        self.must_be_fresh = must_be_fresh.then_some(MustBeFresh);
+        self
+    }
+
+    pub fn must_be_fresh(&self) -> bool {
+        self.must_be_fresh.is_some()
+    }
+
+    pub fn set_forwarding_hint(&mut self, forwarding_hint: Option<Name>) -> &mut Self {
+        self.forwarding_hint = forwarding_hint.map(|name| ForwardingHint { name });
+        self
+    }
+
+    pub fn forwarding_hint(&self) -> Option<&Name> {
+        self.forwarding_hint.as_ref().map(|x| &x.name)
+    }
+
+    pub fn set_nonce(&mut self, nonce: Option<[u8; 4]>) -> &mut Self {
+        self.nonce = nonce.map(|nonce| Nonce { nonce });
+        self
+    }
+
+    pub fn nonce(&self) -> Option<&[u8; 4]> {
+        self.nonce.as_ref().map(|x| &x.nonce)
+    }
+
+    pub fn set_interest_lifetime(
+        &mut self,
+        interest_lifetime: Option<NonNegativeInteger>,
+    ) -> &mut Self {
+        self.interest_lifetime = interest_lifetime.map(|lifetime| InterestLifetime { lifetime });
+        self
+    }
+
+    pub fn interest_lifetime(&self) -> Option<NonNegativeInteger> {
+        self.interest_lifetime.as_ref().map(|x| x.lifetime)
+    }
+
+    pub fn set_hop_limit(&mut self, hop_limit: Option<u8>) -> &mut Self {
+        self.hop_limit = hop_limit.map(|limit| HopLimit { limit });
+        self
+    }
+
+    pub fn hop_limit(&self) -> Option<u8> {
+        self.hop_limit.as_ref().map(|x| x.limit)
+    }
+
+    pub fn set_application_parameters(&mut self, params: Option<AppParamTy>) -> &mut Self {
+        self.application_parameters = params.map(|data| ApplicationParameters { data });
+        self
+    }
+
+    pub fn application_parameters(&self) -> Option<&AppParamTy> {
+        self.application_parameters.as_ref().map(|x| &x.data)
+    }
+
+    pub fn signature_info(&self) -> Option<&InterestSignatureInfo> {
+        self.signature_info.as_ref()
+    }
+
+    pub fn is_signed(&self) -> bool {
+        self.signature_info.is_some()
     }
 }
 

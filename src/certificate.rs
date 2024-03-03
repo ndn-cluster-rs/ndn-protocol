@@ -90,6 +90,18 @@ impl RsaCertificate {
         let key = RsaPublicKey::from_public_key_der(&data.content()?).ok()?;
         Some(Self::new(name, key))
     }
+
+    pub fn name(&self) -> &Name {
+        &self.name
+    }
+
+    pub fn public_key(&self) -> &RsaPublicKey {
+        &self.public_key
+    }
+
+    pub fn private_key(&self) -> Option<&RsaPrivateKey> {
+        self.private_key.as_ref()
+    }
 }
 
 impl Certificate for RsaCertificate {
