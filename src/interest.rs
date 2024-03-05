@@ -156,7 +156,6 @@ impl<AppParamTy> Interest<AppParamTy> {
 impl<AppParamTy> Interest<AppParamTy>
 where
     AppParamTy: TlvEncode,
-    AppParamTy: TlvDecode,
 {
     /// Creates the `ParametersSha256DigestComponent` part of the name.
     ///
@@ -406,10 +405,7 @@ where
     }
 }
 
-impl<AppParamTy> Interest<AppParamTy>
-where
-    AppParamTy: TlvDecode,
-{
+impl<AppParamTy> Interest<AppParamTy> {
     pub fn new(name: Name) -> Self {
         Self {
             name,
