@@ -22,7 +22,7 @@ trait ToUriPart {
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut)]
 #[tlv(8)]
 pub struct GenericNameComponent {
-    name: Bytes,
+    pub name: Bytes,
 }
 
 impl GenericNameComponent {
@@ -56,7 +56,7 @@ impl ToUriPart for GenericNameComponent {
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut)]
 #[tlv(32)]
 pub struct KeywordNameComponent {
-    name: Bytes,
+    pub name: Bytes,
 }
 
 impl KeywordNameComponent {
@@ -100,7 +100,7 @@ impl ToUriPart for KeywordNameComponent {
 )]
 #[tlv(50)]
 pub struct SegmentNameComponent {
-    segment_number: NonNegativeInteger,
+    pub segment_number: NonNegativeInteger,
 }
 
 impl SegmentNameComponent {
@@ -169,7 +169,7 @@ impl ToUriPart for SegmentNameComponent {
 )]
 #[tlv(52)]
 pub struct ByteOffsetNameComponent {
-    offset: NonNegativeInteger,
+    pub offset: NonNegativeInteger,
 }
 
 impl ByteOffsetNameComponent {
@@ -236,7 +236,7 @@ impl ToUriPart for ByteOffsetNameComponent {
 )]
 #[tlv(54)]
 pub struct VersionNameComponent {
-    version: NonNegativeInteger,
+    pub version: NonNegativeInteger,
 }
 
 impl VersionNameComponent {
@@ -290,7 +290,7 @@ impl ToUriPart for VersionNameComponent {
 )]
 #[tlv(56)]
 pub struct TimestampNameComponent {
-    time: NonNegativeInteger,
+    pub time: NonNegativeInteger,
 }
 
 impl TimestampNameComponent {
@@ -372,7 +372,7 @@ impl ToUriPart for TimestampNameComponent {
 )]
 #[tlv(58)]
 pub struct SequenceNumNameComponent {
-    sequence_number: NonNegativeInteger,
+    pub sequence_number: NonNegativeInteger,
 }
 
 impl SequenceNumNameComponent {
