@@ -157,8 +157,6 @@ pub trait SignMethod {
 
     fn sign(&self, data: &[u8]) -> Bytes;
 
-    fn verify(&self, data: &[u8], cert: Self::Certificate, signature: &[u8]) -> bool;
-
     fn time(&self) -> SignatureTime {
         SignatureTime {
             data: NonNegativeInteger::from(
@@ -187,13 +185,22 @@ impl<T: SignMethod> SignMethod for &mut T {
     fn sign(&self, data: &[u8]) -> Bytes {
         (**self).sign(data)
     }
+}
 
-    fn verify(&self, data: &[u8], cert: Self::Certificate, signature: &[u8]) -> bool {
-        (**self).verify(data, cert, signature)
+pub trait SignatureVerifier {
+    fn verify(&self, data: &[u8], signature: &[u8]) -> bool;
+}
+
+impl<T> SignatureVerifier for &T
+where
+    T: SignatureVerifier,
+{
+    fn verify(&self, data: &[u8], signature: &[u8]) -> bool {
+        (**self).verify(data, signature)
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct DigestSha256 {
     seq_num: u64,
 }
@@ -221,15 +228,20 @@ impl SignMethod for DigestSha256 {
         Bytes::copy_from_slice(&hasher.finalize())
     }
 
-    fn verify(&self, data: &[u8], _: Self::Certificate, signature: &[u8]) -> bool {
-        let hashed = self.sign(data);
-        hashed == signature
-    }
-
     fn certificate(&self) -> &Self::Certificate {
         &()
     }
 }
+
+impl SignatureVerifier for DigestSha256 {
+    fn verify(&self, data: &[u8], signature: &[u8]) -> bool {
+        let hashed = self.sign(data);
+        hashed == signature
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SignatureSha256WithRsaVerifier(pub RsaCertificate);
 
 #[derive(Clone, Debug)]
 pub struct SignatureSha256WithRsa {
@@ -238,7 +250,7 @@ pub struct SignatureSha256WithRsa {
 }
 
 impl SignatureSha256WithRsa {
-    pub const fn new(cert: RsaCertificate) -> Self {
+    pub fn new(cert: RsaCertificate) -> Self {
         Self { cert, seq_num: 0 }
     }
 }
@@ -264,17 +276,26 @@ impl SignMethod for SignatureSha256WithRsa {
         Bytes::from(outputvec)
     }
 
-    fn verify(&self, data: &[u8], cert: Self::Certificate, signature: &[u8]) -> bool {
+    fn certificate(&self) -> &Self::Certificate {
+        &self.cert
+    }
+}
+
+impl SignatureVerifier for SignatureSha256WithRsa {
+    fn verify(&self, data: &[u8], signature: &[u8]) -> bool {
+        SignatureSha256WithRsaVerifier(self.cert.clone()).verify(data, signature)
+    }
+}
+
+impl SignatureVerifier for SignatureSha256WithRsaVerifier {
+    fn verify(&self, data: &[u8], signature: &[u8]) -> bool {
         let mut hasher: Sha256 = Sha256::new();
         hasher.update(data);
         let hashed = hasher.finalize();
 
-        cert.public_key()
+        self.0
+            .public_key()
             .verify(Pkcs1v15Sign::new::<Sha256>(), &hashed, &signature)
             .is_ok()
-    }
-
-    fn certificate(&self) -> &Self::Certificate {
-        &self.cert
     }
 }

@@ -4,8 +4,9 @@ use ndn_tlv::{find_tlv, NonNegativeInteger, Tlv, TlvDecode, TlvEncode, VarNum};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    error::VerifyError, signature::SignMethod, Certificate, Interest, Name, NameComponent,
-    SignatureInfo, SignatureType, SignatureValue,
+    error::VerifyError,
+    signature::{SignMethod, SignatureVerifier},
+    Certificate, Interest, Name, NameComponent, SignatureInfo, SignatureType, SignatureValue,
 };
 
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, Display, Default, From, Into, AsRef, AsMut)]
@@ -238,13 +239,9 @@ where
     }
 
     /// Verify the signature of this Data packet with the given SignMethod
-    pub fn verify_with_sign_method<S>(
-        &self,
-        sign_method: &S,
-        cert: S::Certificate,
-    ) -> Result<(), VerifyError>
+    pub fn verify_with_sign_method<S>(&self, sign_method: &S) -> Result<(), VerifyError>
     where
-        S: SignMethod,
+        S: SignatureVerifier,
     {
         let Some(ref signature_value) = self.signature_value else {
             return Err(VerifyError::MissingSignatureInfo);
@@ -252,7 +249,7 @@ where
 
         let signable_portion = self.signable_portion();
 
-        let success = sign_method.verify(&signable_portion, cert, signature_value.as_ref());
+        let success = sign_method.verify(&signable_portion, signature_value.as_ref());
 
         success.then_some(()).ok_or(VerifyError::InvalidSignature)
     }

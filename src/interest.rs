@@ -9,6 +9,7 @@ use crate::{
     name::ParametersSha256DigestComponent,
     signature::{
         InterestSignatureInfo, InterestSignatureValue, SignMethod, SignatureNonce, SignatureSeqNum,
+        SignatureVerifier,
     },
     Certificate, Name, NameComponent, SignatureType,
 };
@@ -355,17 +356,14 @@ where
         }
     }
 
-    /// Verify the interest with a given sign method
+    /// Verify the interest with a given signature verifier
     ///
     /// Returns `Ok(())` if the signature and the `ParametersSha256DigestComponent` of the name are
     /// valid
-    pub fn verify_with_sign_method<T>(
-        &self,
-        sign_method: &T,
-        cert: T::Certificate,
-    ) -> Result<(), VerifyError>
+    pub fn verify_with_verifier<T>(&self, verifier: &T) -> Result<(), VerifyError>
     where
-        T: SignMethod,
+        T: SignatureVerifier,
+        T: ?Sized,
     {
         self.verify_param_digest()?;
 
@@ -379,8 +377,8 @@ where
             return Err(VerifyError::InvalidSignature);
         };
 
-        sign_method
-            .verify(&self.signable_portion(), cert, sig_value.as_ref())
+        verifier
+            .verify(&self.signable_portion(), sig_value.as_ref())
             .then_some(())
             .ok_or(VerifyError::InvalidSignature)
     }
@@ -553,7 +551,7 @@ mod tests {
                 include_seq_num: true,
             },
         );
-        assert!(interest.verify_with_sign_method(&mut signer, ()).is_ok());
+        assert!(interest.verify_with_verifier(&mut signer).is_ok());
 
         let name_components = [
             8, 5, b'h', b'e', b'l', b'l', b'o', 8, 5, b'w', b'o', b'r', b'l', b'd', //
@@ -639,6 +637,6 @@ g==";
         let mut interest = Interest::<()>::new(Name::from_str("ndn:/test/test/asd").unwrap());
         interest.sign(&mut signer, SignSettings::default());
 
-        assert!(interest.verify_with_sign_method(&signer, cert).is_ok());
+        assert!(interest.verify_with_verifier(&signer).is_ok());
     }
 }
