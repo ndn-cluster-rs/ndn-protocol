@@ -781,6 +781,17 @@ impl Name {
         }
         true
     }
+
+    pub fn remove_prefix(&mut self, prefix: &Name) -> bool {
+        if !self.has_prefix(prefix) {
+            return false;
+        }
+
+        for _ in 0..prefix.components.len() {
+            self.components.remove(0);
+        }
+        true
+    }
 }
 
 impl From<NameComponent> for Name {
