@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use crate::{
     error::VerifyError,
     signature::{SignMethod, SignatureVerifier},
-    Certificate, Interest, Name, NameComponent, SignatureInfo, SignatureType, SignatureValue,
+    Interest, Name, NameComponent, SignatureInfo, SignatureType, SignatureValue,
 };
 
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, Display, Default, From, Into, AsRef, AsMut)]
@@ -184,7 +184,8 @@ where
     {
         self.signature_info = Some(SignatureInfo::new(
             SignatureType::new(VarNum::from(S::SIGNATURE_TYPE)),
-            sign_method.certificate().locator(),
+            sign_method.certificate().map(|x| x.name_locator()),
+            None,
         ));
 
         let mut signed_portion = self.encode();
@@ -242,6 +243,7 @@ where
     pub fn verify_with_sign_method<S>(&self, sign_method: &S) -> Result<(), VerifyError>
     where
         S: SignatureVerifier,
+        S: ?Sized,
     {
         let Some(ref signature_value) = self.signature_value else {
             return Err(VerifyError::MissingSignatureInfo);
@@ -319,6 +321,6 @@ g==";
         let mut signer = SignatureSha256WithRsa::new(cert.clone());
         data.sign(&mut signer);
 
-        assert!(data.verify_with_sign_method(&signer, cert).is_ok());
+        assert!(data.verify_with_sign_method(&signer).is_ok());
     }
 }

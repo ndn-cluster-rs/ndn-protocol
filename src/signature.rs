@@ -1,6 +1,8 @@
-use bytes::Bytes;
+use std::io::Read;
+
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use derive_more::{AsMut, AsRef, Constructor, Display, From, Into};
-use ndn_tlv::{NonNegativeInteger, Tlv, VarNum};
+use ndn_tlv::{NonNegativeInteger, Tlv, TlvDecode, TlvEncode, TlvError, VarNum};
 
 use rand::SeedableRng;
 use rsa::{
@@ -10,7 +12,7 @@ use rsa::{
 };
 use sha2::{Digest, Sha256};
 
-use crate::{Certificate, Name, RsaCertificate};
+use crate::{certificate::ToCertificate, Certificate, Data, Name, RsaCertificate};
 
 #[derive(
     Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut, Display, Constructor,
@@ -32,10 +34,97 @@ pub enum KeyLocatorData {
     KeyDigest(KeyDigest),
 }
 
+impl KeyLocatorData {
+    pub fn as_name(&self) -> Option<&Name> {
+        if let Self::Name(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_key_digest(&self) -> Option<&KeyDigest> {
+        if let Self::KeyDigest(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, AsRef, AsMut, Constructor, From, Into)]
 #[tlv(28)]
 pub struct KeyLocator {
     locator: KeyLocatorData,
+}
+
+impl KeyLocator {
+    pub fn locator(&self) -> &KeyLocatorData {
+        &self.locator
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Constructor)]
+pub struct Timestamp {
+    date: [u8; 8],
+    time: [u8; 6],
+}
+
+impl TlvEncode for Timestamp {
+    fn encode(&self) -> Bytes {
+        let mut bytes = BytesMut::with_capacity(self.size());
+        bytes.put(&self.date[..]);
+        bytes.put_u8(b'T');
+        bytes.put(&self.time[..]);
+        bytes.freeze()
+    }
+
+    fn size(&self) -> usize {
+        15
+    }
+}
+
+impl TlvDecode for Timestamp {
+    fn decode(bytes: &mut Bytes) -> ndn_tlv::Result<Self> {
+        if bytes.remaining() < 15 {
+            return Err(TlvError::UnexpectedEndOfStream);
+        }
+        let mut date = [0; 8];
+        let mut t = [0];
+        let mut time = [0; 6];
+
+        let mut reader = bytes.reader();
+        reader
+            .read_exact(&mut date)
+            .map_err(|_| TlvError::FormatError)?;
+        reader
+            .read_exact(&mut t)
+            .map_err(|_| TlvError::FormatError)?;
+        reader
+            .read_exact(&mut time)
+            .map_err(|_| TlvError::FormatError)?;
+
+        Ok(Self { date, time })
+    }
+}
+
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, Constructor)]
+#[tlv(254)]
+pub struct NotBefore {
+    pub not_before: Timestamp,
+}
+
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, Constructor)]
+#[tlv(255)]
+pub struct NotAfter {
+    pub not_after: Timestamp,
+}
+
+#[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, Constructor)]
+#[tlv(253)]
+pub struct ValidityPeriod {
+    pub not_before: NotBefore,
+    pub not_after: NotAfter,
 }
 
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, Constructor)]
@@ -43,6 +132,7 @@ pub struct KeyLocator {
 pub struct SignatureInfo {
     signature_type: SignatureType,
     key_locator: Option<KeyLocator>,
+    validity_period: Option<ValidityPeriod>,
 }
 
 impl SignatureInfo {
@@ -149,11 +239,9 @@ pub struct InterestSignatureValue {
 
 pub trait SignMethod {
     const SIGNATURE_TYPE: u64;
-    type Certificate: Certificate;
-
     fn next_seq_num(&mut self) -> u64;
 
-    fn certificate(&self) -> &Self::Certificate;
+    fn certificate(&self) -> Option<Certificate>;
 
     fn sign(&self, data: &[u8]) -> Bytes;
 
@@ -172,13 +260,11 @@ pub trait SignMethod {
 impl<T: SignMethod> SignMethod for &mut T {
     const SIGNATURE_TYPE: u64 = T::SIGNATURE_TYPE;
 
-    type Certificate = T::Certificate;
-
     fn next_seq_num(&mut self) -> u64 {
         (**self).next_seq_num()
     }
 
-    fn certificate(&self) -> &Self::Certificate {
+    fn certificate(&self) -> Option<Certificate> {
         (**self).certificate()
     }
 
@@ -189,6 +275,8 @@ impl<T: SignMethod> SignMethod for &mut T {
 
 pub trait SignatureVerifier {
     fn verify(&self, data: &[u8], signature: &[u8]) -> bool;
+
+    fn certificate(&self) -> Option<Certificate>;
 }
 
 impl<T> SignatureVerifier for &T
@@ -197,6 +285,10 @@ where
 {
     fn verify(&self, data: &[u8], signature: &[u8]) -> bool {
         (**self).verify(data, signature)
+    }
+
+    fn certificate(&self) -> Option<Certificate> {
+        (**self).certificate()
     }
 }
 
@@ -213,7 +305,6 @@ impl DigestSha256 {
 
 impl SignMethod for DigestSha256 {
     const SIGNATURE_TYPE: u64 = 0;
-    type Certificate = ();
 
     fn next_seq_num(&mut self) -> u64 {
         let seq_num = self.seq_num;
@@ -228,8 +319,8 @@ impl SignMethod for DigestSha256 {
         Bytes::copy_from_slice(&hasher.finalize())
     }
 
-    fn certificate(&self) -> &Self::Certificate {
-        &()
+    fn certificate(&self) -> Option<Certificate> {
+        None
     }
 }
 
@@ -237,6 +328,10 @@ impl SignatureVerifier for DigestSha256 {
     fn verify(&self, data: &[u8], signature: &[u8]) -> bool {
         let hashed = self.sign(data);
         hashed == signature
+    }
+
+    fn certificate(&self) -> Option<Certificate> {
+        None
     }
 }
 
@@ -258,8 +353,6 @@ impl SignatureSha256WithRsa {
 impl SignMethod for SignatureSha256WithRsa {
     const SIGNATURE_TYPE: u64 = 1;
 
-    type Certificate = RsaCertificate;
-
     fn next_seq_num(&mut self) -> u64 {
         let seq_num = self.seq_num;
         self.seq_num += 1;
@@ -276,14 +369,18 @@ impl SignMethod for SignatureSha256WithRsa {
         Bytes::from(outputvec)
     }
 
-    fn certificate(&self) -> &Self::Certificate {
-        &self.cert
+    fn certificate(&self) -> Option<Certificate> {
+        Some(self.cert.to_certificate())
     }
 }
 
 impl SignatureVerifier for SignatureSha256WithRsa {
     fn verify(&self, data: &[u8], signature: &[u8]) -> bool {
         SignatureSha256WithRsaVerifier(self.cert.clone()).verify(data, signature)
+    }
+
+    fn certificate(&self) -> Option<Certificate> {
+        Some(self.cert.to_certificate())
     }
 }
 
@@ -297,5 +394,9 @@ impl SignatureVerifier for SignatureSha256WithRsaVerifier {
             .public_key()
             .verify(Pkcs1v15Sign::new::<Sha256>(), &hashed, &signature)
             .is_ok()
+    }
+
+    fn certificate(&self) -> Option<Certificate> {
+        Some(self.0.to_certificate())
     }
 }

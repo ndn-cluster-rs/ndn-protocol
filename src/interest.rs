@@ -11,7 +11,7 @@ use crate::{
         InterestSignatureInfo, InterestSignatureValue, SignMethod, SignatureNonce, SignatureSeqNum,
         SignatureVerifier,
     },
-    Certificate, Name, NameComponent, SignatureType,
+    Name, NameComponent, SignatureType,
 };
 
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Copy, Constructor, Hash, Default)]
@@ -295,7 +295,7 @@ where
 
         self.signature_info = Some(InterestSignatureInfo {
             signature_type: SignatureType::new(T::SIGNATURE_TYPE.into()),
-            key_locator: sign_method.certificate().locator(),
+            key_locator: sign_method.certificate().map(|x| x.name_locator()),
             nonce,
             time: settings.include_time.then(|| sign_method.time()),
             seq_num: settings
@@ -506,7 +506,6 @@ impl<AppParamTy> Interest<AppParamTy> {
 #[cfg(test)]
 mod tests {
     use base64::Engine;
-    use sha2::{Digest, Sha256};
 
     use crate::{signature::DigestSha256, RsaCertificate, SafeBag, SignatureSha256WithRsa};
 
