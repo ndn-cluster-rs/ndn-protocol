@@ -108,7 +108,7 @@ impl Default for SignSettings {
     fn default() -> Self {
         Self {
             include_time: true,
-            include_seq_num: true,
+            include_seq_num: false,
             nonce_length: 8,
         }
     }

@@ -14,6 +14,38 @@ use sha2::{Digest, Sha256};
 
 use crate::{certificate::ToCertificate, Certificate, Data, Name, RsaCertificate};
 
+use self::signature_type::get_signature_type;
+
+pub mod signature_type {
+    use ndn_tlv::TlvEncode;
+
+    use crate::Data;
+
+    pub const DIGEST_SHA256: usize = 0;
+    pub const SIGNATURE_SHA256_WITH_RSA: usize = 1;
+    pub const SIGNATURE_SHA256_WITH_ECDSA: usize = 3;
+    pub const SIGNATRUE_HMAC_WITH_SHA256: usize = 4;
+    pub const SIGNATURE_ED25519: usize = 5;
+
+    pub(super) fn get_signature_type<T: TlvEncode>(data: &Data<T>) -> Option<usize> {
+        Some(
+            data.meta_info()
+                .as_ref()?
+                .content_type
+                .as_ref()?
+                .content_type
+                .as_usize(),
+        )
+    }
+
+    pub(super) fn ensure_signature_type<T: TlvEncode>(data: &Data<T>, typ: usize) -> Option<()> {
+        if get_signature_type(data)? != typ {
+            return None;
+        }
+        Some(())
+    }
+}
+
 #[derive(
     Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut, Display, Constructor,
 )]
@@ -273,10 +305,33 @@ impl<T: SignMethod> SignMethod for &mut T {
     }
 }
 
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct KnownVerifiers;
+
+pub trait ToVerifier {
+    fn from_data(&self, data: Data<Bytes>) -> Option<Box<dyn SignatureVerifier>>;
+}
+
+impl ToVerifier for KnownVerifiers {
+    fn from_data(&self, data: Data<Bytes>) -> Option<Box<dyn SignatureVerifier>> {
+        match get_signature_type(&data)? {
+            signature_type::DIGEST_SHA256 => Some(Box::new(DigestSha256::from_data(data)?)),
+            signature_type::SIGNATURE_SHA256_WITH_RSA => {
+                Some(Box::new(SignatureSha256WithRsa::from_data(data)?))
+            }
+            _ => None,
+        }
+    }
+}
+
 pub trait SignatureVerifier {
     fn verify(&self, data: &[u8], signature: &[u8]) -> bool;
 
     fn certificate(&self) -> Option<Certificate>;
+
+    fn from_data(data: Data<Bytes>) -> Option<Self>
+    where
+        Self: Sized;
 }
 
 impl<T> SignatureVerifier for &T
@@ -289,6 +344,13 @@ where
 
     fn certificate(&self) -> Option<Certificate> {
         (**self).certificate()
+    }
+
+    fn from_data(_data: Data<Bytes>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        None
     }
 }
 
@@ -332,6 +394,13 @@ impl SignatureVerifier for DigestSha256 {
 
     fn certificate(&self) -> Option<Certificate> {
         None
+    }
+
+    fn from_data(_data: Data<Bytes>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        Some(DigestSha256::new())
     }
 }
 
@@ -382,6 +451,14 @@ impl SignatureVerifier for SignatureSha256WithRsa {
     fn certificate(&self) -> Option<Certificate> {
         Some(self.cert.to_certificate())
     }
+
+    fn from_data(data: Data<Bytes>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        signature_type::ensure_signature_type(&data, signature_type::SIGNATURE_SHA256_WITH_RSA)?;
+        Some(Self::new(RsaCertificate::new(Certificate(data))?))
+    }
 }
 
 impl SignatureVerifier for SignatureSha256WithRsaVerifier {
@@ -398,5 +475,13 @@ impl SignatureVerifier for SignatureSha256WithRsaVerifier {
 
     fn certificate(&self) -> Option<Certificate> {
         Some(self.0.to_certificate())
+    }
+
+    fn from_data(data: Data<Bytes>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        signature_type::ensure_signature_type(&data, signature_type::SIGNATURE_SHA256_WITH_RSA)?;
+        Some(Self(RsaCertificate::new(Certificate(data))?))
     }
 }

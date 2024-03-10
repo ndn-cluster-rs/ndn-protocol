@@ -24,7 +24,7 @@ pub struct EncryptedKey {
 }
 
 #[derive(Clone, Debug, Hash)]
-pub struct Certificate(Data<Bytes>);
+pub struct Certificate(pub Data<Bytes>);
 
 pub trait ToCertificate {
     fn to_certificate(&self) -> Certificate;
