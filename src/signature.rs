@@ -172,8 +172,8 @@ impl SignatureInfo {
         self.signature_type.signature_type
     }
 
-    pub fn key_locator(&self) -> Option<&KeyLocator> {
-        self.key_locator.as_ref()
+    pub fn key_locator(&self) -> Option<&KeyLocatorData> {
+        self.key_locator.as_ref().map(|x| &x.locator)
     }
 }
 
