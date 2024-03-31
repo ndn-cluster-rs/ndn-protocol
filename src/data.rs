@@ -90,7 +90,7 @@ impl FreshnessPeriod {
 }
 
 impl Data<Bytes> {
-    pub fn content_decode<U>(self) -> Data<U>
+    pub fn decode_content<U>(self) -> Data<U>
     where
         U: TlvDecode,
     {
@@ -154,7 +154,7 @@ where
         self
     }
 
-    pub fn content_encode(self) -> Data<Bytes> {
+    pub fn encode_content(self) -> Data<Bytes> {
         Data {
             name: self.name,
             meta_info: self.meta_info,

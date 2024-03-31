@@ -1,3 +1,4 @@
+use ndn_tlv::TlvError;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, NdnError>;
@@ -8,11 +9,29 @@ pub enum NdnError {
     ParseError,
     #[error("Failed to verify")]
     VerifyError(VerifyError),
+    #[error("TLV Error: {0}")]
+    TlvError(TlvError),
+    #[error("{0}")]
+    GenericError(String),
+    #[error("IO Error: {0}")]
+    IOError(std::io::Error),
 }
 
 impl From<url::ParseError> for NdnError {
     fn from(_value: url::ParseError) -> Self {
         NdnError::ParseError
+    }
+}
+
+impl From<TlvError> for NdnError {
+    fn from(value: TlvError) -> Self {
+        NdnError::TlvError(value)
+    }
+}
+
+impl From<std::io::Error> for NdnError {
+    fn from(value: std::io::Error) -> Self {
+        NdnError::IOError(value)
     }
 }
 

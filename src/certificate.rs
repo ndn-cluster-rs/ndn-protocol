@@ -8,7 +8,7 @@ use rsa::{
     RsaPrivateKey, RsaPublicKey,
 };
 
-use crate::{Data, KeyLocator, Name, SignatureInfo};
+use crate::{error::NdnError, Data, KeyLocator, Name, SignatureInfo};
 
 #[derive(Tlv, Clone, Hash, Debug)]
 #[tlv(128)]
@@ -85,29 +85,31 @@ impl ToCertificate for RsaCertificate {
 }
 
 impl SafeBag {
-    pub fn load_file(path: impl AsRef<Path>) -> Option<Self> {
-        let mut file_content = std::fs::read(path).ok()?;
+    pub fn load_file(path: impl AsRef<Path>) -> Result<Self, NdnError> {
+        let mut file_content = std::fs::read(path)?;
         file_content.retain(|x| *x != b'\n' && *x != b'\r');
         let safebag_data = base64::engine::general_purpose::STANDARD
             .decode(&file_content)
-            .ok()?;
-        SafeBag::decode(&mut Bytes::from(safebag_data)).ok()
+            .map_err(|_| {
+                NdnError::GenericError("Could not base64-decode certificate".to_string())
+            })?;
+        Ok(SafeBag::decode(&mut Bytes::from(safebag_data))?)
     }
 }
 
 impl Certificate {
-    pub fn load_file<P>(path: P) -> Option<Self>
+    pub fn load_file<P>(path: P) -> Result<Self, NdnError>
     where
         P: AsRef<Path>,
     {
-        let mut file_content = std::fs::read(path).ok()?;
+        let mut file_content = std::fs::read(path)?;
         file_content.retain(|x| *x != b'\n' && *x != b'\r');
         let safebag_data = base64::engine::general_purpose::STANDARD
             .decode(&file_content)
-            .ok()?;
-        Some(Self(
-            Data::<Bytes>::decode(&mut Bytes::from(safebag_data)).ok()?,
-        ))
+            .map_err(|_| {
+                NdnError::GenericError("Could not base64-decode certificate".to_string())
+            })?;
+        Ok(Self(Data::<Bytes>::decode(&mut Bytes::from(safebag_data))?))
     }
 
     pub fn name(&self) -> &Name {
