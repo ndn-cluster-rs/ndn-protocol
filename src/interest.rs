@@ -115,7 +115,7 @@ impl Default for SignSettings {
 }
 
 impl Interest<Bytes> {
-    pub fn application_parameters_decode<T>(self) -> Interest<T>
+    pub fn decode_application_parameters<T>(self) -> Interest<T>
     where
         T: TlvDecode,
     {
@@ -360,7 +360,7 @@ where
     ///
     /// Returns `Ok(())` if the signature and the `ParametersSha256DigestComponent` of the name are
     /// valid
-    pub fn verify_with_verifier<T>(&self, verifier: &T) -> Result<(), VerifyError>
+    pub fn verify<T>(&self, verifier: &T) -> Result<(), VerifyError>
     where
         T: SignatureVerifier,
         T: ?Sized,
@@ -550,7 +550,7 @@ mod tests {
                 include_seq_num: true,
             },
         );
-        assert!(interest.verify_with_verifier(&mut signer).is_ok());
+        assert!(interest.verify(&mut signer).is_ok());
 
         let name_components = [
             8, 5, b'h', b'e', b'l', b'l', b'o', 8, 5, b'w', b'o', b'r', b'l', b'd', //
@@ -636,6 +636,6 @@ g==";
         let mut interest = Interest::<()>::new(Name::from_str("ndn:/test/test/asd").unwrap());
         interest.sign(&mut signer, SignSettings::default());
 
-        assert!(interest.verify_with_verifier(&signer).is_ok());
+        assert!(interest.verify(&signer).is_ok());
     }
 }

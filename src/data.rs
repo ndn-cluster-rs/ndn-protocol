@@ -240,7 +240,7 @@ where
     }
 
     /// Verify the signature of this Data packet with the given SignMethod
-    pub fn verify_with_sign_method<S>(&self, sign_method: &S) -> Result<(), VerifyError>
+    pub fn verify<S>(&self, sign_method: &S) -> Result<(), VerifyError>
     where
         S: SignatureVerifier,
         S: ?Sized,
@@ -321,6 +321,6 @@ g==";
         let mut signer = SignatureSha256WithRsa::new(cert.clone());
         data.sign(&mut signer);
 
-        assert!(data.verify_with_sign_method(&signer).is_ok());
+        assert!(data.verify(&signer).is_ok());
     }
 }
