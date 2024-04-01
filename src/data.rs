@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     error::VerifyError,
-    signature::{SignMethod, SignatureVerifier},
+    signature::{SignMethod, SignatureVerifier, ValidityPeriod},
     Interest, Name, NameComponent, SignatureInfo, SignatureType, SignatureValue,
 };
 
@@ -178,15 +178,11 @@ where
         data
     }
 
-    pub fn sign<S>(&mut self, sign_method: &mut S)
+    fn sign_internal<S>(&mut self, sign_method: &S, signature_info: SignatureInfo)
     where
         S: SignMethod,
     {
-        self.signature_info = Some(SignatureInfo::new(
-            SignatureType::new(VarNum::from(S::SIGNATURE_TYPE)),
-            sign_method.certificate().map(|x| x.name_locator()),
-            None,
-        ));
+        self.signature_info = Some(signature_info);
 
         let mut signed_portion = self.encode();
 
@@ -196,6 +192,34 @@ where
 
         let signature = sign_method.sign(&signed_portion);
         self.signature_value = Some(SignatureValue::new(signature));
+    }
+
+    pub fn sign<S>(&mut self, sign_method: &mut S)
+    where
+        S: SignMethod,
+    {
+        self.sign_internal(
+            sign_method,
+            SignatureInfo::new(
+                SignatureType::new(VarNum::from(S::SIGNATURE_TYPE)),
+                sign_method.certificate().map(|x| x.name_locator()),
+                None,
+            ),
+        )
+    }
+
+    pub fn sign_cert<S>(&mut self, sign_method: &S, validity_period: ValidityPeriod)
+    where
+        S: SignMethod,
+    {
+        self.sign_internal(
+            sign_method,
+            SignatureInfo::new(
+                SignatureType::new(VarNum::from(S::SIGNATURE_TYPE)),
+                sign_method.certificate().map(|x| x.name_locator()),
+                Some(validity_period),
+            ),
+        )
     }
 
     pub fn signature_info(&self) -> Option<&SignatureInfo> {
