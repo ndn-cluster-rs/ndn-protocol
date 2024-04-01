@@ -403,6 +403,12 @@ where
     }
 }
 
+impl Interest<()> {
+    pub fn new_u(name: Name) -> Self {
+        Self::new(name)
+    }
+}
+
 impl<AppParamTy> Interest<AppParamTy> {
     pub fn new(name: Name) -> Self {
         Self {
