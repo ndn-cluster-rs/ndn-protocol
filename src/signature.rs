@@ -12,7 +12,9 @@ use rsa::{
 };
 use sha2::{Digest, Sha256};
 
-use crate::{certificate::ToCertificate, Certificate, Data, Name, RsaCertificate};
+use crate::{
+    certificate::ToCertificate, Certificate, ContentType, Data, MetaInfo, Name, RsaCertificate,
+};
 
 use self::signature_type::get_signature_type;
 
@@ -29,12 +31,11 @@ pub mod signature_type {
 
     pub(super) fn get_signature_type<T: TlvEncode>(data: &Data<T>) -> Option<usize> {
         Some(
-            data.meta_info()
+            data.signature_info()
                 .as_ref()?
-                .content_type
-                .as_ref()?
-                .content_type
-                .as_usize(),
+                .signature_type
+                .signature_type
+                .into(),
         )
     }
 
@@ -309,11 +310,11 @@ impl<T: SignMethod> SignMethod for &mut T {
 pub struct KnownVerifiers;
 
 pub trait ToVerifier {
-    fn from_data(&self, data: Data<Bytes>) -> Option<Box<dyn SignatureVerifier>>;
+    fn from_data(&self, data: Data<Bytes>) -> Option<Box<dyn SignatureVerifier + Send + Sync>>;
 }
 
 impl ToVerifier for KnownVerifiers {
-    fn from_data(&self, data: Data<Bytes>) -> Option<Box<dyn SignatureVerifier>> {
+    fn from_data(&self, data: Data<Bytes>) -> Option<Box<dyn SignatureVerifier + Send + Sync>> {
         match get_signature_type(&data)? {
             signature_type::DIGEST_SHA256 => Some(Box::new(DigestSha256::from_data(data)?)),
             signature_type::SIGNATURE_SHA256_WITH_RSA => {
