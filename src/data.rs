@@ -111,12 +111,12 @@ impl<T> Data<T>
 where
     T: TlvEncode,
 {
-    pub fn new(name: Name, content: T) -> Self {
+    pub const fn new(name: Name, content: T) -> Self {
         Data {
             name,
             meta_info: Some(MetaInfo {
                 content_type: Some(ContentType {
-                    content_type: 0u8.into(),
+                    content_type: NonNegativeInteger::U8(0),
                 }),
                 freshness_period: None,
                 final_block_id: None,
