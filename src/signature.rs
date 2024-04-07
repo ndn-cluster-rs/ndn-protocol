@@ -364,6 +364,18 @@ impl DigestSha256 {
     pub const fn new() -> Self {
         DigestSha256 { seq_num: 0 }
     }
+
+    pub fn certificate() -> Certificate {
+        let mut data = Data::new(Name::empty(), Bytes::new());
+        data.set_meta_info(Some(MetaInfo {
+            content_type: Some(ContentType {
+                content_type: NonNegativeInteger::new(signature_type::DIGEST_SHA256 as u64),
+            }),
+            freshness_period: None,
+            final_block_id: None,
+        }));
+        Certificate(data)
+    }
 }
 
 impl SignMethod for DigestSha256 {
