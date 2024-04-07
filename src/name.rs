@@ -708,6 +708,12 @@ impl Ord for Name {
 }
 
 impl Name {
+    pub const fn empty() -> Self {
+        Name {
+            components: Vec::new(),
+        }
+    }
+
     pub fn from_str(s: &str) -> Result<Self> {
         let s = if !s.starts_with("ndn:") {
             Cow::Owned(format!("ndn:{}", s))
