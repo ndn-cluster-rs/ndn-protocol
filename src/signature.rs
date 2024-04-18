@@ -11,6 +11,7 @@ use rsa::{
     Pkcs1v15Sign,
 };
 use sha2::{Digest, Sha256};
+use time::{OffsetDateTime, UtcOffset};
 
 use crate::{
     certificate::ToCertificate, Certificate, ContentType, Data, MetaInfo, Name, RsaCertificate,
@@ -101,6 +102,35 @@ impl KeyLocator {
 pub struct Timestamp {
     date: [u8; 8],
     time: [u8; 6],
+}
+
+impl From<OffsetDateTime> for Timestamp {
+    fn from(value: OffsetDateTime) -> Self {
+        let datetime = value.to_offset(UtcOffset::UTC);
+        let date = format!(
+            "{:02}{:02}{:04}",
+            datetime.day(),
+            datetime.month() as u8,
+            datetime.year()
+        );
+
+        let mut date_buf = [0; 8];
+        date_buf.copy_from_slice(&date.as_bytes());
+
+        let time = format!(
+            "{:02}{:02}{:02}",
+            datetime.hour(),
+            datetime.minute(),
+            datetime.second()
+        );
+
+        let mut time_buf = [0; 6];
+        time_buf.copy_from_slice(&time.as_bytes());
+        Timestamp {
+            date: date_buf,
+            time: time_buf,
+        }
+    }
 }
 
 impl TlvEncode for Timestamp {
