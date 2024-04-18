@@ -812,9 +812,7 @@ impl TryFrom<&str> for Name {
     type Error = NdnError;
 
     fn try_from(value: &str) -> std::result::Result<Name, NdnError> {
-        NameComponent::from_uri_part(value.as_bytes())
-            .ok_or(NdnError::ParseError)
-            .map(Into::into)
+        Name::from_str(value)
     }
 }
 
