@@ -2,7 +2,7 @@ use std::path::Path;
 
 use base64::Engine;
 use bytes::Bytes;
-use ndn_tlv::{Tlv, TlvDecode};
+use ndn_tlv::{Tlv, TlvDecode, TlvEncode};
 use rsa::{
     pkcs8::{DecodePrivateKey, DecodePublicKey},
     RsaPrivateKey, RsaPublicKey,
@@ -135,5 +135,21 @@ impl Certificate {
 
     pub fn signature_info(&self) -> Option<&SignatureInfo> {
         self.0.signature_info()
+    }
+}
+
+impl TlvEncode for Certificate {
+    fn encode(&self) -> Bytes {
+        self.0.encode()
+    }
+
+    fn size(&self) -> usize {
+        self.0.size()
+    }
+}
+
+impl TlvDecode for Certificate {
+    fn decode(bytes: &mut Bytes) -> ndn_tlv::Result<Self> {
+        Data::<Bytes>::decode(bytes).map(Self)
     }
 }
