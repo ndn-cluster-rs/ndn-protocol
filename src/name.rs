@@ -800,6 +800,12 @@ impl Name {
     }
 }
 
+impl std::fmt::Display for Name {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.to_uri().fmt(f)
+    }
+}
+
 impl From<NameComponent> for Name {
     fn from(value: NameComponent) -> Self {
         Name {
