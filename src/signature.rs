@@ -343,6 +343,42 @@ impl<T: SignMethod> SignMethod for &mut T {
     }
 }
 
+impl<T: SignMethod + ?Sized> SignMethod for Box<T> {
+    fn signature_type(&self) -> u64 {
+        (**self).signature_type()
+    }
+
+    fn next_seq_num(&mut self) -> u64 {
+        (**self).next_seq_num()
+    }
+
+    fn certificate(&self) -> Option<Certificate> {
+        (**self).certificate()
+    }
+
+    fn sign(&self, data: &[u8]) -> Bytes {
+        (**self).sign(data)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct KnownSigners;
+
+pub trait ToSigner {
+    fn from_data(&self, data: Data<Bytes>) -> Option<Box<dyn SignMethod + Send + Sync>>;
+}
+impl ToSigner for KnownSigners {
+    fn from_data(&self, data: Data<Bytes>) -> Option<Box<dyn SignMethod + Send + Sync>> {
+        match get_signature_type(&data)? {
+            signature_type::DIGEST_SHA256 => Some(Box::new(DigestSha256::from_data(data)?)),
+            signature_type::SIGNATURE_SHA256_WITH_RSA => {
+                Some(Box::new(SignatureSha256WithRsa::from_data(data)?))
+            }
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct KnownVerifiers;
 
