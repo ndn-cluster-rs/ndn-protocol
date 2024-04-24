@@ -301,7 +301,8 @@ pub struct InterestSignatureValue {
 }
 
 pub trait SignMethod {
-    const SIGNATURE_TYPE: u64;
+    fn signature_type(&self) -> u64;
+
     fn next_seq_num(&mut self) -> u64;
 
     fn certificate(&self) -> Option<Certificate>;
@@ -320,8 +321,14 @@ pub trait SignMethod {
     }
 }
 
+pub trait SignMethodType {
+    const SIGNATURE_TYPE: u64;
+}
+
 impl<T: SignMethod> SignMethod for &mut T {
-    const SIGNATURE_TYPE: u64 = T::SIGNATURE_TYPE;
+    fn signature_type(&self) -> u64 {
+        (**self).signature_type()
+    }
 
     fn next_seq_num(&mut self) -> u64 {
         (**self).next_seq_num()
@@ -408,8 +415,14 @@ impl DigestSha256 {
     }
 }
 
-impl SignMethod for DigestSha256 {
+impl SignMethodType for DigestSha256 {
     const SIGNATURE_TYPE: u64 = 0;
+}
+
+impl SignMethod for DigestSha256 {
+    fn signature_type(&self) -> u64 {
+        Self::SIGNATURE_TYPE
+    }
 
     fn next_seq_num(&mut self) -> u64 {
         let seq_num = self.seq_num;
@@ -462,8 +475,14 @@ impl SignatureSha256WithRsa {
     }
 }
 
-impl SignMethod for SignatureSha256WithRsa {
+impl SignMethodType for SignatureSha256WithRsa {
     const SIGNATURE_TYPE: u64 = 1;
+}
+
+impl SignMethod for SignatureSha256WithRsa {
+    fn signature_type(&self) -> u64 {
+        Self::SIGNATURE_TYPE
+    }
 
     fn next_seq_num(&mut self) -> u64 {
         let seq_num = self.seq_num;

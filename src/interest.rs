@@ -294,7 +294,7 @@ where
         let seq_num = sign_method.next_seq_num();
 
         self.signature_info = Some(InterestSignatureInfo {
-            signature_type: SignatureType::new(T::SIGNATURE_TYPE.into()),
+            signature_type: SignatureType::new(sign_method.signature_type().into()),
             key_locator: sign_method.certificate().map(|x| x.name_locator()),
             nonce,
             time: settings.include_time.then(|| sign_method.time()),

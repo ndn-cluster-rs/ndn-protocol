@@ -201,7 +201,7 @@ where
         self.sign_internal(
             sign_method,
             SignatureInfo::new(
-                SignatureType::new(VarNum::from(S::SIGNATURE_TYPE)),
+                SignatureType::new(VarNum::from(sign_method.signature_type())),
                 sign_method.certificate().map(|x| x.name_locator()),
                 None,
             ),
@@ -215,7 +215,7 @@ where
         self.sign_internal(
             sign_method,
             SignatureInfo::new(
-                SignatureType::new(VarNum::from(S::SIGNATURE_TYPE)),
+                SignatureType::new(VarNum::from(sign_method.signature_type())),
                 sign_method.certificate().map(|x| x.name_locator()),
                 Some(validity_period),
             ),
