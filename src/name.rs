@@ -770,20 +770,7 @@ impl PartialOrd for Name {
 
 impl Ord for Name {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let mut self_repr = self.encode();
-        let mut other_repr = other.encode();
-
-        while self_repr.has_remaining() && other_repr.has_remaining() {
-            let self_cur = self_repr.get_u8();
-            let other_cur = other_repr.get_u8();
-
-            if self_cur < other_cur {
-                return std::cmp::Ordering::Less;
-            } else if self_cur > other_cur {
-                return std::cmp::Ordering::Greater;
-            }
-        }
-        std::cmp::Ordering::Equal
+        self.components.cmp(&other.components)
     }
 }
 
@@ -1430,9 +1417,19 @@ mod tests {
         names.sort();
         assert_eq!(names, [
             Name::from_str("ndn:/some/prefix").unwrap(),
+            Name::from_str("ndn:/some/prefix/name/sha256digest=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef").unwrap(),
             Name::from_str("ndn:/some/prefix/name/asd").unwrap(),
             Name::from_str("ndn:/some/prefix/name/fgh").unwrap(),
-            Name::from_str("ndn:/some/prefix/name/sha256digest=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef").unwrap(),
         ]);
+    }
+
+    #[test]
+    fn name_order_by_component_not_total_length() {
+        // Ensure the first differeing component determines the order, regardless of total encoded
+        // length
+        let short_prefix = Name::from_str("/a/a").unwrap();
+        let long_component = Name::from_str("/aa").unwrap();
+
+        assert_eq!(short_prefix.cmp(&long_component), std::cmp::Ordering::Less);
     }
 }
