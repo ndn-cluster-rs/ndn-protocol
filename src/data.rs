@@ -1,3 +1,10 @@
+//! [`Data`], the packet returned in response to an [`Interest`].
+//!
+//! Like [`Interest`], `Data` is generic over its content
+//! type, so a payload can be carried either as raw [`Bytes`] or as a
+//! concrete type that implements
+//! [`ndn_tlv::TlvEncode`]/[`ndn_tlv::TlvDecode`].
+
 use bytes::{Buf, Bytes};
 use derive_more::{AsMut, AsRef, Display, From, Into};
 use ndn_tlv::{find_tlv, NonNegativeInteger, Tlv, TlvDecode, TlvEncode, VarNum};
@@ -9,13 +16,20 @@ use crate::{
     Interest, Name, NameComponent, SignatureInfo, SignatureType, SignatureValue,
 };
 
+/// What kind of content a [`Data`] packet carries -- see the associated
+/// constants ([`ContentType::BLOB`], [`ContentType::LINK`], etc.) for the
+/// well-known values.
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, Display, Default, From, Into, AsRef, AsMut)]
 #[tlv(24)]
 #[display(fmt = "{}", content_type)]
 pub struct ContentType {
+    /// The raw content type number.
     pub content_type: NonNegativeInteger,
 }
 
+/// How long, in milliseconds, this Data should be considered fresh for
+/// after being received. A consumer requiring fresh Data (see
+/// [`MustBeFresh`](crate::MustBeFresh)) won't accept it once this expires.
 #[derive(
     Debug,
     Tlv,
@@ -35,29 +49,45 @@ pub struct ContentType {
 #[tlv(25)]
 #[display(fmt = "{}", freshness_period)]
 pub struct FreshnessPeriod {
+    /// The freshness period in milliseconds.
     pub freshness_period: NonNegativeInteger,
 }
 
+/// The name component of the final (last) piece of a segmented object,
+/// letting a consumer detect when it has fetched every segment.
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut)]
 #[tlv(26)]
 pub struct FinalBlockId {
+    /// The final segment's name component.
     pub final_block_id: NameComponent,
 }
 
+/// The Data packet's payload.
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, Default, From, AsRef, AsMut)]
 #[tlv(21)]
 pub struct Content<T> {
+    /// The payload itself.
     pub data: T,
 }
 
+/// Metadata describing a [`Data`] packet's content: its [`ContentType`],
+/// [`FreshnessPeriod`], and [`FinalBlockId`], all optional.
 #[derive(Debug, Tlv, PartialEq, Eq, Default, Clone, Hash)]
 #[tlv(20)]
 pub struct MetaInfo {
+    /// What kind of content this is.
     pub content_type: Option<ContentType>,
+    /// How long the content stays fresh for.
     pub freshness_period: Option<FreshnessPeriod>,
+    /// The final segment's name component, for segmented content.
     pub final_block_id: Option<FinalBlockId>,
 }
 
+/// The packet returned in response to a matching [`Interest`].
+///
+/// `T` is the type the content decodes/encodes as; use [`Bytes`] to work
+/// with the raw payload, or a type implementing
+/// [`ndn_tlv::TlvEncode`]/[`ndn_tlv::TlvDecode`] to work with it directly.
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash)]
 #[tlv(6)]
 pub struct Data<T> {
@@ -69,11 +99,16 @@ pub struct Data<T> {
 }
 
 impl ContentType {
+    /// Regular, opaque application data.
     pub const BLOB: Self = Self::new(0);
+    /// A link to other Data.
     pub const LINK: Self = Self::new(1);
+    /// A public key.
     pub const KEY: Self = Self::new(2);
+    /// A negative acknowledgement, indicating an Interest could not be satisfied.
     pub const NACK: Self = Self::new(3);
 
+    /// Creates a `ContentType` from a raw type number.
     pub const fn new(typ: u64) -> Self {
         Self {
             content_type: NonNegativeInteger::new(typ),
@@ -82,6 +117,7 @@ impl ContentType {
 }
 
 impl FreshnessPeriod {
+    /// Creates a `FreshnessPeriod` of `period` milliseconds.
     pub fn new(period: u64) -> Self {
         Self {
             freshness_period: NonNegativeInteger::new(period),
@@ -90,6 +126,11 @@ impl FreshnessPeriod {
 }
 
 impl Data<Bytes> {
+    /// Decodes the raw content into a concrete type `U`, converting a `Data<Bytes>` into the
+    /// corresponding `Data<U>`.
+    ///
+    /// If decoding fails, or there was no content to begin with, the
+    /// returned Data simply has none.
     pub fn decode_content<U>(self) -> Data<U>
     where
         U: TlvDecode,
@@ -111,6 +152,8 @@ impl<T> Data<T>
 where
     T: TlvEncode,
 {
+    /// Creates a new, unsigned Data packet for `name` carrying `content`,
+    /// with its content type defaulted to [`ContentType::BLOB`].
     pub const fn new(name: Name, content: T) -> Self {
         Data {
             name,
@@ -127,33 +170,41 @@ where
         }
     }
 
+    /// The Data packet's name.
     pub fn name(&self) -> &Name {
         &self.name
     }
 
+    /// Sets the Data packet's name.
     pub fn set_name(&mut self, name: Name) -> &mut Self {
         self.name = name;
         self
     }
 
+    /// The Data packet's [`MetaInfo`], if set.
     pub fn meta_info(&self) -> &Option<MetaInfo> {
         &self.meta_info
     }
 
+    /// Sets the Data packet's [`MetaInfo`], or clears it if `None`.
     pub fn set_meta_info(&mut self, meta_info: Option<MetaInfo>) -> &mut Self {
         self.meta_info = meta_info;
         self
     }
 
+    /// The Data packet's content, if set.
     pub fn content(&self) -> Option<&T> {
         self.content.as_ref().map(|x| &x.data)
     }
 
+    /// Sets the Data packet's content, or clears it if `None`.
     pub fn set_content(&mut self, content: Option<T>) -> &mut Self {
         self.content = content.map(|data| Content { data });
         self
     }
 
+    /// Encodes the content to its raw TLV bytes, the inverse of
+    /// [`Data::decode_content`].
     pub fn encode_content(self) -> Data<Bytes> {
         Data {
             name: self.name,
@@ -194,6 +245,7 @@ where
         self.signature_value = Some(SignatureValue::new(signature));
     }
 
+    /// Signs the Data packet with `sign_method`.
     pub fn sign<S>(&mut self, sign_method: &mut S)
     where
         S: SignMethod,
@@ -208,6 +260,9 @@ where
         )
     }
 
+    /// Signs the Data packet with `sign_method`, additionally recording a
+    /// [`ValidityPeriod`] the signature is only considered valid within.
+    /// Used to sign certificates, which need an expiry.
     pub fn sign_cert<S>(&mut self, sign_method: &S, validity_period: ValidityPeriod)
     where
         S: SignMethod,
@@ -222,14 +277,23 @@ where
         )
     }
 
+    /// The signature info added by [`Data::sign`]/[`Data::sign_cert`], if the Data is signed.
     pub fn signature_info(&self) -> Option<&SignatureInfo> {
         self.signature_info.as_ref()
     }
 
+    /// Whether the Data packet carries a signature.
     pub fn is_signed(&self) -> bool {
         self.signature_info.is_some()
     }
 
+    /// Returns whether this Data satisfies `interest` by name, respecting
+    /// [`CanBePrefix`](crate::CanBePrefix) and an implicit digest
+    /// component, if present.
+    ///
+    /// This only checks the name; it doesn't check
+    /// [`MustBeFresh`](crate::MustBeFresh), since freshness depends on
+    /// when the Data was received, which this packet doesn't know.
     pub fn matches_interest<D>(&self, interest: &Interest<D>) -> bool
     where
         D: TlvEncode + TlvDecode,

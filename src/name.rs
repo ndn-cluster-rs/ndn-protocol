@@ -1,3 +1,14 @@
+//! [`Name`], the hierarchical name every NDN packet is addressed by, and
+//! [`NameComponent`], the individual `/`-separated pieces a name is made
+//! of.
+//!
+//! A name component isn't just bytes -- its TLV type says what kind of
+//! component it is (a plain segment, a version number, an embedded digest,
+//! and so on), and [`NameComponent`] wraps one such typed component. Most
+//! application code only needs [`GenericNameComponent`] (a plain,
+//! human-readable segment) and [`Name::from_str`]/[`Name::to_uri`] to move
+//! between names and their `ndn:/a/b/c`-style URI form.
+
 use std::{
     borrow::Cow,
     cmp::max,
@@ -19,13 +30,17 @@ trait ToUriPart {
     fn to_uri_part(&self) -> String;
 }
 
+/// A plain, human-readable name component -- the common case, e.g. each of
+/// `hello`, `world`, and `asd` in `/hello/world/asd`.
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut)]
 #[tlv(8)]
 pub struct GenericNameComponent {
+    /// The component's raw bytes.
     pub name: Bytes,
 }
 
 impl GenericNameComponent {
+    /// Creates a `GenericNameComponent` from raw bytes.
     pub fn new(name: Bytes) -> Self {
         Self { name }
     }
@@ -53,13 +68,17 @@ impl ToUriPart for GenericNameComponent {
     }
 }
 
+/// A name component holding a well-known keyword rather than arbitrary
+/// data, written as `32=<keyword>` in a name's URI form.
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut)]
 #[tlv(32)]
 pub struct KeywordNameComponent {
+    /// The keyword's raw bytes.
     pub name: Bytes,
 }
 
 impl KeywordNameComponent {
+    /// Creates a `KeywordNameComponent` from raw bytes.
     pub fn new(name: Bytes) -> Self {
         Self { name }
     }
@@ -82,6 +101,8 @@ impl ToUriPart for KeywordNameComponent {
     }
 }
 
+/// A name component identifying one segment of content split across
+/// several Data packets, written as `seg=<number>` in a name's URI form.
 #[derive(
     Debug,
     Tlv,
@@ -100,10 +121,12 @@ impl ToUriPart for KeywordNameComponent {
 )]
 #[tlv(50)]
 pub struct SegmentNameComponent {
+    /// The segment number.
     pub segment_number: NonNegativeInteger,
 }
 
 impl SegmentNameComponent {
+    /// Creates a `SegmentNameComponent` for `segment_number`.
     pub fn new(segment_number: NonNegativeInteger) -> Self {
         Self { segment_number }
     }
@@ -151,6 +174,8 @@ impl ToUriPart for SegmentNameComponent {
     }
 }
 
+/// A name component identifying a byte offset into a larger piece of
+/// content, written as `off=<number>` in a name's URI form.
 #[derive(
     Debug,
     Tlv,
@@ -169,10 +194,12 @@ impl ToUriPart for SegmentNameComponent {
 )]
 #[tlv(52)]
 pub struct ByteOffsetNameComponent {
+    /// The byte offset.
     pub offset: NonNegativeInteger,
 }
 
 impl ByteOffsetNameComponent {
+    /// Creates a `ByteOffsetNameComponent` for `offset`.
     pub fn new(offset: NonNegativeInteger) -> Self {
         Self { offset }
     }
@@ -218,6 +245,8 @@ impl ToUriPart for ByteOffsetNameComponent {
     }
 }
 
+/// A name component identifying a specific version of otherwise
+/// identically-named content, written as `v=<number>` in a name's URI form.
 #[derive(
     Debug,
     Tlv,
@@ -236,10 +265,12 @@ impl ToUriPart for ByteOffsetNameComponent {
 )]
 #[tlv(54)]
 pub struct VersionNameComponent {
+    /// The version number.
     pub version: NonNegativeInteger,
 }
 
 impl VersionNameComponent {
+    /// Creates a `VersionNameComponent` for `version`.
     pub fn new(version: NonNegativeInteger) -> Self {
         Self { version }
     }
@@ -285,19 +316,24 @@ impl ToUriPart for VersionNameComponent {
     }
 }
 
+/// A name component holding a point in time (Unix time in milliseconds),
+/// written as `t=<number>` in a name's URI form.
 #[derive(
     Debug, Tlv, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, From, Into, AsRef, AsMut, Display,
 )]
 #[tlv(56)]
 pub struct TimestampNameComponent {
+    /// The timestamp, as Unix time in milliseconds.
     pub time: NonNegativeInteger,
 }
 
 impl TimestampNameComponent {
+    /// Creates a `TimestampNameComponent` for `time`.
     pub fn new(time: NonNegativeInteger) -> Self {
         Self { time }
     }
 
+    /// Creates a `TimestampNameComponent` for the current time.
     pub fn now() -> Self {
         Self::new(NonNegativeInteger::new(
             SystemTime::now()
@@ -354,6 +390,8 @@ impl ToUriPart for TimestampNameComponent {
     }
 }
 
+/// A name component holding a sequence number, written as `seq=<number>`
+/// in a name's URI form.
 #[derive(
     Debug,
     Tlv,
@@ -372,10 +410,12 @@ impl ToUriPart for TimestampNameComponent {
 )]
 #[tlv(58)]
 pub struct SequenceNumNameComponent {
+    /// The sequence number.
     pub sequence_number: NonNegativeInteger,
 }
 
 impl SequenceNumNameComponent {
+    /// Creates a `SequenceNumNameComponent` for `sequence_number`.
     pub fn new(sequence_number: NonNegativeInteger) -> Self {
         Self { sequence_number }
     }
@@ -423,6 +463,9 @@ impl ToUriPart for SequenceNumNameComponent {
     }
 }
 
+/// A name component holding the SHA-256 digest of the Data packet it
+/// identifies. Always the last component of a fully-specified name,
+/// written as `sha256digest=<hex>` in a name's URI form.
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut)]
 #[tlv(1)]
 pub struct ImplicitSha256DigestComponent {
@@ -458,6 +501,10 @@ impl std::fmt::Display for ImplicitSha256DigestComponent {
     }
 }
 
+/// A name component holding the SHA-256 digest of a signed Interest's
+/// application parameters and signature, appended automatically when
+/// signing (see [`Interest::sign`](crate::Interest::sign)). Written as
+/// `params-sha256=<hex>` in a name's URI form.
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash, From, Into, AsRef, AsMut)]
 #[tlv(2)]
 pub struct ParametersSha256DigestComponent {
@@ -493,10 +540,15 @@ impl std::fmt::Display for ParametersSha256DigestComponent {
     }
 }
 
+/// A name component of a type this crate doesn't have a dedicated wrapper
+/// for, kept as its raw TLV type, length, and value.
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct OtherNameComponent {
+    /// The component's TLV type number.
     pub typ: VarNum,
+    /// The component's TLV length.
     pub length: VarNum,
+    /// The component's raw value bytes.
     pub data: Bytes,
 }
 
@@ -560,17 +612,38 @@ impl ToUriPart for OtherNameComponent {
     }
 }
 
+/// A single `/`-separated piece of a [`Name`], tagged with the TLV type
+/// that says what kind of component it is.
+///
+/// Most components round-trip through a specific wrapper type --
+/// [`GenericNameComponent`] for a plain segment, [`SegmentNameComponent`]
+/// for a `seg=` segment number, and so on -- so that, for instance, a
+/// [`VersionNameComponent`] can't accidentally be constructed from bytes
+/// that aren't a valid version number. Any component type this crate
+/// doesn't know about decodes into [`OtherNameComponent`] instead of
+/// failing.
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, From, Hash)]
 pub enum NameComponent {
+    /// A plain, human-readable component -- see [`GenericNameComponent`].
     GenericNameComponent(GenericNameComponent),
+    /// A SHA-256 digest of the identified Data packet -- see [`ImplicitSha256DigestComponent`].
     ImplicitSha256DigestComponent(ImplicitSha256DigestComponent),
+    /// A SHA-256 digest of a signed Interest's application parameters --
+    /// see [`ParametersSha256DigestComponent`].
     ParametersSha256DigestComponent(ParametersSha256DigestComponent),
+    /// A well-known keyword -- see [`KeywordNameComponent`].
     KeywordNameComponent(KeywordNameComponent),
+    /// A segment number -- see [`SegmentNameComponent`].
     SegmentNameComponent(SegmentNameComponent),
+    /// A byte offset -- see [`ByteOffsetNameComponent`].
     ByteOffsetNameComponent(ByteOffsetNameComponent),
+    /// A version number -- see [`VersionNameComponent`].
     VersionNameComponent(VersionNameComponent),
+    /// A point in time -- see [`TimestampNameComponent`].
     TimestampNameComponent(TimestampNameComponent),
+    /// A sequence number -- see [`SequenceNumNameComponent`].
     SequenceNumNameComponent(SequenceNumNameComponent),
+    /// Any component type not covered by the variants above -- see [`OtherNameComponent`].
     #[tlv(default)]
     OtherNameComponent(OtherNameComponent),
 }
@@ -676,9 +749,16 @@ impl ToUriPart for NameComponent {
     }
 }
 
+/// A hierarchical NDN name: an ordered sequence of [`NameComponent`]s.
+///
+/// Names identify both Interests and the Data that satisfies them, and are
+/// usually written and read as a `ndn:/a/b/c`-style URI -- see
+/// [`Name::from_str`] and [`Name::to_uri`]. `Name` implements [`Ord`] so
+/// names can be sorted and compared, by comparing their encoded bytes.
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Hash)]
 #[tlv(7)]
 pub struct Name {
+    /// The name's components, in order from least to most specific.
     pub components: Vec<NameComponent>,
 }
 
@@ -708,12 +788,15 @@ impl Ord for Name {
 }
 
 impl Name {
+    /// The name with no components, i.e. `ndn:/`.
     pub const fn empty() -> Self {
         Name {
             components: Vec::new(),
         }
     }
 
+    /// Parses a name from its URI form, e.g. `/hello/world` or
+    /// `ndn:/hello/world`. The leading `ndn:` scheme is optional.
     pub fn from_str(s: &str) -> Result<Self> {
         let s = if !s.starts_with("ndn:") {
             Cow::Owned(format!("ndn:{}", s))
@@ -740,6 +823,7 @@ impl Name {
         Ok(Name { components })
     }
 
+    /// Renders the name back into its `ndn:/a/b/c` URI form.
     pub fn to_uri(&self) -> Url {
         let path: String = itertools::intersperse(
             self.components
@@ -752,18 +836,29 @@ impl Name {
         Url::parse(&format!("ndn:/{}", path)).unwrap()
     }
 
+    /// Iterates over the name's components.
     pub fn iter(&self) -> impl Iterator<Item = &NameComponent> {
         self.components.iter()
     }
 
+    /// Iterates mutably over the name's components.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut NameComponent> {
         self.components.iter_mut()
     }
 
+    /// Consumes the name, iterating over its components by value.
     pub fn into_iter(self) -> impl Iterator<Item = NameComponent> {
         self.components.into_iter()
     }
 
+    /// Appends `other`'s components to this name's, returning the combined
+    /// name. `other` can be another [`Name`], a URI [`&str`], or anything
+    /// else that converts to a `Name`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `other` fails to convert into a [`Name`], e.g. an invalid
+    /// URI string.
     pub fn join<T: TryInto<Self>>(&self, other: T) -> Self
     where
         <T as TryInto<Self>>::Error: std::fmt::Debug,
@@ -776,6 +871,7 @@ impl Name {
         Self { components }
     }
 
+    /// Returns whether `prefix` is a prefix of this name, component by component.
     pub fn has_prefix(&self, prefix: &Name) -> bool {
         if prefix.components.len() > self.components.len() {
             return false;
@@ -788,6 +884,8 @@ impl Name {
         true
     }
 
+    /// Removes `prefix` from the front of this name if it's actually a
+    /// prefix, returning whether anything was removed.
     pub fn remove_prefix(&mut self, prefix: &Name) -> bool {
         if !self.has_prefix(prefix) {
             return false;

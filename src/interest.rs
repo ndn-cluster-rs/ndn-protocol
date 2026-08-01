@@ -1,3 +1,11 @@
+//! [`Interest`], the packet used to request [`Data`](crate::Data) by name.
+//!
+//! An `Interest` is a [`Name`] plus a handful of optional selectors and,
+//! for signed Interests, application parameters and a signature. It's
+//! generic over its application parameters type, so a payload can be
+//! carried either as raw [`Bytes`] or as a concrete type that implements
+//! [`ndn_tlv::TlvEncode`]/[`ndn_tlv::TlvDecode`].
+
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use derive_more::{AsMut, AsRef, Constructor, From, Into};
 use ndn_tlv::{find_tlv, NonNegativeInteger, Tlv, TlvDecode, TlvEncode, VarNum};
@@ -14,26 +22,35 @@ use crate::{
     Name, NameComponent, SignatureType,
 };
 
+/// A marker element allowing the Interest to match Data whose name has this
+/// Interest's name as a prefix, rather than requiring an exact match.
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Copy, Constructor, Hash, Default)]
 #[tlv(33)]
 pub struct CanBePrefix;
 
+/// A marker element requiring the forwarder to return only Data that isn't
+/// stale, i.e. still within its [`FreshnessPeriod`](crate::FreshnessPeriod).
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Copy, Constructor, Hash, Default)]
 #[tlv(18)]
 pub struct MustBeFresh;
 
+/// Suggests a name for the forwarder to use when deciding where to forward
+/// this Interest, as a hint rather than a hard requirement.
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Constructor)]
 #[tlv(30)]
 pub struct ForwardingHint {
     name: Name,
 }
 
+/// A random value that lets a forwarder detect duplicate/looping Interests.
 #[derive(Debug, Tlv, PartialEq, Eq, Clone, Copy, Constructor, From, Into, AsRef, AsMut, Hash)]
 #[tlv(10)]
 pub struct Nonce {
     nonce: [u8; 4],
 }
 
+/// How long, in milliseconds, the Interest stays pending at a forwarder
+/// while it waits for matching Data.
 #[derive(
     Debug,
     Tlv,
@@ -55,6 +72,8 @@ pub struct InterestLifetime {
     lifetime: NonNegativeInteger,
 }
 
+/// The maximum number of forwarder hops this Interest may still travel,
+/// decremented by each forwarder it passes through.
 #[derive(
     Debug,
     Tlv,
@@ -76,12 +95,24 @@ pub struct HopLimit {
     limit: u8,
 }
 
+/// The Interest's application-defined payload.
+///
+/// Present only on signed Interests (or Interests that will be signed):
+/// its encoding is what [`Interest::make_parameters_digest`] hashes into
+/// the name's `ParametersSha256DigestComponent`.
 #[derive(Debug, Tlv, PartialEq, Eq, Hash, From, AsRef, AsMut, Constructor, Clone)]
 #[tlv(36)]
 pub struct ApplicationParameters<T> {
     data: T,
 }
 
+/// A request for [`Data`](crate::Data) matching a [`Name`], optionally
+/// carrying application parameters and a signature.
+///
+/// `T` is the type application parameters decode/encode as; use `()` for
+/// Interests that don't carry any, [`Bytes`] to work with the raw payload,
+/// or a type implementing [`ndn_tlv::TlvEncode`]/[`ndn_tlv::TlvDecode`] to
+/// work with it directly.
 #[derive(Debug, Tlv, PartialEq, Eq, Hash, Clone)]
 #[tlv(5)]
 pub struct Interest<T> {
@@ -97,10 +128,15 @@ pub struct Interest<T> {
     signature_value: Option<InterestSignatureValue>,
 }
 
+/// Options controlling what [`Interest::sign`]/[`Interest::sign_checked`] include
+/// in the signature.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Constructor, Hash)]
 pub struct SignSettings {
+    /// Whether to include a signing timestamp.
     pub include_time: bool,
+    /// Whether to include a signing sequence number.
     pub include_seq_num: bool,
+    /// The length, in bytes, of the random signing nonce. `0` omits the nonce.
     pub nonce_length: usize,
 }
 
@@ -115,6 +151,11 @@ impl Default for SignSettings {
 }
 
 impl Interest<Bytes> {
+    /// Decodes the raw application parameters into a concrete type `T`, converting an
+    /// `Interest<Bytes>` into the curresponding `Interest<T>`.
+    ///
+    /// If decoding fails, or there were no application parameters to begin
+    /// with, the returned Interest simply has none.
     pub fn decode_application_parameters<T>(self) -> Interest<T>
     where
         T: TlvDecode,
@@ -138,6 +179,7 @@ impl Interest<Bytes> {
 }
 
 impl<AppParamTy> Interest<AppParamTy> {
+    /// Drops the application parameters, returning an `Interest<()>`.
     pub fn remove_application_parameters(self) -> Interest<()> {
         Interest {
             application_parameters: None,
@@ -249,6 +291,8 @@ where
         hasher.finalize().into()
     }
 
+    /// Signs the Interest with `sign_method`, setting empty application
+    /// parameters first if none are set yet.
     pub fn sign<T>(&mut self, sign_method: &mut T, settings: SignSettings)
     where
         T: SignMethod,
@@ -262,6 +306,12 @@ where
             .expect("sign_checked failed from sign")
     }
 
+    /// Signs the Interest with `sign_method`, adding a signature info,
+    /// signature value, and `ParametersSha256DigestComponent` to the name.
+    ///
+    /// Fails if the Interest has no application parameters set --
+    /// signed Interests are required to carry some, even if empty. see
+    /// [`Interest::sign`] for a version that sets empty ones automatically.
     pub fn sign_checked<T>(
         &mut self,
         sign_method: &mut T,
@@ -383,6 +433,8 @@ where
             .ok_or(VerifyError::InvalidSignature)
     }
 
+    /// Encodes the application parameters to their raw TLV bytes, the
+    /// inverse of [`Interest::decode_application_parameters`].
     pub fn encode_application_parameters(self) -> Interest<Bytes> {
         Interest {
             name: self.name,
@@ -404,12 +456,15 @@ where
 }
 
 impl Interest<()> {
+    /// Same as [`Interest::new`], for callers that need to spell out that
+    /// `T` is `()` for type inference to work.
     pub fn new_u(name: Name) -> Self {
         Self::new(name)
     }
 }
 
 impl<AppParamTy> Interest<AppParamTy> {
+    /// Creates a new, unsigned Interest for `name` with no selectors set.
     pub fn new(name: Name) -> Self {
         Self {
             name,
@@ -425,51 +480,64 @@ impl<AppParamTy> Interest<AppParamTy> {
         }
     }
 
+    /// Sets the Interest's name.
     pub fn set_name(&mut self, name: Name) -> &mut Self {
         self.name = name;
         self
     }
 
+    /// The Interest's name.
     pub fn name(&self) -> &Name {
         &self.name
     }
 
+    /// Sets whether the Interest can be satisfied by Data whose name has
+    /// this Interest's name as a prefix (see [`CanBePrefix`]).
     pub fn set_can_be_prefix(&mut self, can_be_prefix: bool) -> &mut Self {
         self.can_be_prefix = can_be_prefix.then_some(CanBePrefix);
         self
     }
 
+    /// Whether [`CanBePrefix`] is set.
     pub fn can_be_prefix(&self) -> bool {
         self.can_be_prefix.is_some()
     }
 
+    /// Sets whether the Interest requires fresh Data (see [`MustBeFresh`]).
     pub fn set_must_be_fresh(&mut self, must_be_fresh: bool) -> &mut Self {
         self.must_be_fresh = must_be_fresh.then_some(MustBeFresh);
         self
     }
 
+    /// Whether [`MustBeFresh`] is set.
     pub fn must_be_fresh(&self) -> bool {
         self.must_be_fresh.is_some()
     }
 
+    /// Sets the forwarding hint, or clears it if `None` (see [`ForwardingHint`]).
     pub fn set_forwarding_hint(&mut self, forwarding_hint: Option<Name>) -> &mut Self {
         self.forwarding_hint = forwarding_hint.map(|name| ForwardingHint { name });
         self
     }
 
+    /// The forwarding hint's name, if set.
     pub fn forwarding_hint(&self) -> Option<&Name> {
         self.forwarding_hint.as_ref().map(|x| &x.name)
     }
 
+    /// Sets the nonce, or clears it if `None` (see [`Nonce`]).
     pub fn set_nonce(&mut self, nonce: Option<[u8; 4]>) -> &mut Self {
         self.nonce = nonce.map(|nonce| Nonce { nonce });
         self
     }
 
+    /// The nonce, if set.
     pub fn nonce(&self) -> Option<&[u8; 4]> {
         self.nonce.as_ref().map(|x| &x.nonce)
     }
 
+    /// Sets the interest lifetime in milliseconds, or clears it if `None`
+    /// (see [`InterestLifetime`]).
     pub fn set_interest_lifetime(
         &mut self,
         interest_lifetime: Option<NonNegativeInteger>,
@@ -478,32 +546,39 @@ impl<AppParamTy> Interest<AppParamTy> {
         self
     }
 
+    /// The interest lifetime in milliseconds, if set.
     pub fn interest_lifetime(&self) -> Option<NonNegativeInteger> {
         self.interest_lifetime.as_ref().map(|x| x.lifetime)
     }
 
+    /// Sets the hop limit, or clears it if `None` (see [`HopLimit`]).
     pub fn set_hop_limit(&mut self, hop_limit: Option<u8>) -> &mut Self {
         self.hop_limit = hop_limit.map(|limit| HopLimit { limit });
         self
     }
 
+    /// The hop limit, if set.
     pub fn hop_limit(&self) -> Option<u8> {
         self.hop_limit.as_ref().map(|x| x.limit)
     }
 
+    /// Sets the application parameters, or clears them if `None`.
     pub fn set_application_parameters(&mut self, params: Option<AppParamTy>) -> &mut Self {
         self.application_parameters = params.map(|data| ApplicationParameters { data });
         self
     }
 
+    /// The application parameters, if set.
     pub fn application_parameters(&self) -> Option<&AppParamTy> {
         self.application_parameters.as_ref().map(|x| &x.data)
     }
 
+    /// The signature info added by [`Interest::sign`]/[`Interest::sign_checked`], if the Interest is signed.
     pub fn signature_info(&self) -> Option<&InterestSignatureInfo> {
         self.signature_info.as_ref()
     }
 
+    /// Whether the Interest carries a signature.
     pub fn is_signed(&self) -> bool {
         self.signature_info.is_some()
     }
